@@ -5,46 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Evidencija Opreme na Objektu</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; color: #333; }
-        h2 { color: #1a252f; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        body { font-family: Arial, sans-serif; margin: 15px; background-color: #f4f6f9; color: #333; }
+        h2 { color: #1a252f; text-align: center; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        .form-group { margin-bottom: 10px; }
+        label { display: block; font-weight: bold; margin-bottom: 3px; font-size: 13px; }
         input, textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
-        textarea { resize: vertical; height: 60px; }
+        textarea { resize: vertical; height: 50px; }
         .row { display: flex; gap: 10px; flex-wrap: wrap; }
-        .col { flex: 1; min-width: 200px; }
-        button { background-color: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background-color: #219150; }
-        button.btn-export { background-color: #2980b9; margin-top: 10px; }
-        button.btn-export:hover { background-color: #1c5980; }
+        .col { flex: 1; min-width: 140px; }
+        
+        button { border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; width: 100%; margin-bottom: 8px; }
+        .btn-paste { background-color: #8e44ad; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-paste:hover { background-color: #71368a; }
+        .btn-save { background-color: #27ae60; color: white; }
+        .btn-save:hover { background-color: #219150; }
+        .btn-export { background-color: #2980b9; color: white; width: auto; }
+        
+        /* Modal za Check & Confirm */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); overflow: auto; }
+        .modal-content { background: white; margin: 5% auto; padding: 20px; width: 90%; max-width: 500px; border-radius: 8px; }
+        .check-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; background: #f8f9fa; padding: 6px; border-radius: 4px; }
+        .check-item input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+        .check-item input[type="text"] { flex: 1; margin: 0; }
+        
         .table-responsive { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; }
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
         th { background-color: #2c3e50; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
     </style>
 </head>
 <body>
 
-    <h2>📦 Evidencija Opreme na Objektu</h2>
+    <h2>📦 Evidencija Opreme</h2>
 
+    <!-- DUGME ZA AUTOMATSKO UČITAVANJE IZ CLIPBOARD-A -->
     <div class="card">
-        <h3>Unos novog uređaja</h3>
+        <button type="button" class="btn-paste" onclick="pasteFromClipboard()">
+            📋 UČITAJ PODATKE IZ CHAT-A
+        </button>
+        <p style="font-size: 11px; color: #666; margin: 5px 0 0 0; text-align: center;">
+            (Nakon što u chatu klikneš 'Copy' na moj kod, samo stisni ovo dugme)
+        </p>
+    </div>
+
+    <!-- FORMA ZA UNOS -->
+    <div class="card">
         <form id="equipmentForm">
-            <!-- PRVI RED: Lokacija i Mreža -->
             <div class="row">
                 <div class="col form-group">
                     <label>Naziv objekta:</label>
-                    <input type="text" id="facility" placeholder="npr. Objekt A - TC Galerija" required>
+                    <input type="text" id="facility" placeholder="npr. Objekt A" required>
                 </div>
                 <div class="col form-group">
                     <label>IP Adresa:</label>
-                    <input type="text" id="ipAddress" placeholder="npr. 192.168.1.50">
+                    <input type="text" id="ipAddress" placeholder="192.168.1.X">
                 </div>
             </div>
 
-            <!-- DRUGI RED: Osnovni podaci o uređaju -->
             <div class="row">
                 <div class="col form-group">
                     <label>Proizvođač:</label>
@@ -52,52 +71,60 @@
                 </div>
                 <div class="col form-group">
                     <label>Model:</label>
-                    <input type="text" id="model" placeholder="npr. Access Modular Controller 2" required>
+                    <input type="text" id="model" placeholder="Model uređaja">
                 </div>
                 <div class="col form-group">
                     <label>Oznaka / Tip:</label>
-                    <input type="text" id="type" placeholder="npr. API-AMC2-16IOE">
+                    <input type="text" id="type" placeholder="Oznaka">
                 </div>
             </div>
 
-            <!-- TREĆI RED: Brojevi i količina -->
             <div class="row">
                 <div class="col form-group">
-                    <label>Mat/N (Kataloški broj):</label>
-                    <input type="text" id="matNo" placeholder="npr. F01U411051">
+                    <label>Mat/N (Kataloški br.):</label>
+                    <input type="text" id="matNo" placeholder="F01U...">
                 </div>
                 <div class="col form-group">
                     <label>Serijski broj (S/N):</label>
-                    <input type="text" id="sn" placeholder="npr. 041072457418100061">
+                    <input type="text" id="sn" placeholder="S/N">
                 </div>
-                <div class="col form-group" style="max-width: 100px;">
+                <div class="col form-group" style="max-width: 80px;">
                     <label>Količina:</label>
                     <input type="number" id="qty" value="1">
                 </div>
             </div>
 
-            <!-- ČETVRTI RED: Opis i Komentar/Napomena -->
-            <div class="row">
-                <div class="col form-group">
-                    <label>Opis uređaja:</label>
-                    <input type="text" id="description" placeholder="npr. Extension board with 16-input 16-output">
-                </div>
-            </div>
-            <div class="row">
-                <div class="col form-group">
-                    <label>Komentar / Napomena (Sprat, stanje, uočeni problemi...):</label>
-                    <textarea id="comment" placeholder="npr. 2. sprat, server sala, rek 3. Kutija malo izgrebana sa strane."></textarea>
-                </div>
+            <div class="form-group">
+                <label>Opis:</label>
+                <input type="text" id="description" placeholder="Opis uređaja">
             </div>
 
-            <button type="submit">➕ Dodaj u tabelu</button>
+            <div class="form-group">
+                <label>Komentar / Napomena (Sprat, stanje...):</label>
+                <textarea id="comment" placeholder="npr. 2. sprat, rek 3..."></textarea>
+            </div>
+
+            <button type="submit" class="btn-save">💾 SAČUVAJ U TABELU</button>
         </form>
     </div>
 
+    <!-- MODAL ZA CHECK & CONFIRM -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <h3>🔍 Provera pročitanih podataka</h3>
+            <p style="font-size: 12px; color: #666;">Štiklirajte podatke koje želite da ubacite u formu:</p>
+            
+            <div id="checkList"></div>
+
+            <button type="button" class="btn-save" onclick="applyCheckedData()">✅ POTVRDI (Prenesi u formu)</button>
+            <button type="button" style="background:#e74c3c; color:white; margin-top:5px;" onclick="closeModal()">❌ Odustani</button>
+        </div>
+    </div>
+
+    <!-- TABELA -->
     <div class="card">
         <h3>Lista opreme na objektu</h3>
-        <button class="btn-export" onclick="exportToCSV()">📥 Preuzmi CSV za Excel</button>
-        <br><br>
+        <button class="btn-export" onclick="exportToCSV()">📥 Preuzmi CSV (Excel)</button>
         <div class="table-responsive">
             <table id="dataTable">
                 <thead>
@@ -112,54 +139,106 @@
                         <th>Serijski Broj (S/N)</th>
                         <th>Opis</th>
                         <th>Kol.</th>
-                        <th>Komentar / Napomena</th>
+                        <th>Komentar</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <!-- Podaci stižu ovde -->
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
 
     <script>
-        let count = 0;
+        // Čitanje teksta iz Clipboard-a
+        async function pasteFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const data = JSON.parse(jsonMatch[0]);
+                    showReviewModal(data);
+                } else {
+                    alert("Kopirani tekst ne sadrži ispravne podatke. Prvo kliknite 'Copy' na kod u chatu.");
+                }
+            } catch (err) {
+                alert("Dozvolite pristup Clipboard-u u pregledaču ili ručno zalepite tekst.");
+            }
+        }
 
+        // Prikaz modala sa CHECKBOX poljima
+        function showReviewModal(data) {
+            const listDiv = document.getElementById('checkList');
+            listDiv.innerHTML = '';
+
+            const fields = [
+                { id: 'brand', label: 'Proizvođač', val: data.brand },
+                { id: 'model', label: 'Model', val: data.model },
+                { id: 'type', label: 'Oznaka/Tip', val: data.type },
+                { id: 'matNo', label: 'Mat/N', val: data.matNo },
+                { id: 'sn', label: 'S/N', val: data.sn },
+                { id: 'description', label: 'Opis', val: data.description },
+                { id: 'qty', label: 'Količina', val: data.qty }
+            ];
+
+            fields.forEach(f => {
+                if (f.val) {
+                    const item = document.createElement('div');
+                    item.className = 'check-item';
+                    item.innerHTML = `
+                        <input type="checkbox" id="check_${f.id}" checked>
+                        <label style="width:100px; font-size:12px;">${f.label}:</label>
+                        <input type="text" id="val_${f.id}" value="${f.val}">
+                    `;
+                    listDiv.appendChild(item);
+                }
+            });
+
+            document.getElementById('reviewModal').style.display = 'block';
+        }
+
+        function applyCheckedData() {
+            const fields = ['brand', 'model', 'type', 'matNo', 'sn', 'description', 'qty'];
+            
+            fields.forEach(f => {
+                const chk = document.getElementById(`check_${f}`);
+                const valInput = document.getElementById(`val_${f}`);
+                if (chk && chk.checked && valInput) {
+                    document.getElementById(f).value = valInput.value;
+                }
+            });
+
+            closeModal();
+        }
+
+        function closeModal() {
+            document.getElementById('reviewModal').style.display = 'none';
+        }
+
+        // Dodavanje u tabelu
+        let count = 0;
         document.getElementById('equipmentForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
             count++;
-            const facility = document.getElementById('facility').value;
-            const ipAddress = document.getElementById('ipAddress').value;
-            const brand = document.getElementById('brand').value;
-            const model = document.getElementById('model').value;
-            const type = document.getElementById('type').value;
-            const matNo = document.getElementById('matNo').value;
-            const sn = document.getElementById('sn').value;
-            const qty = document.getElementById('qty').value;
-            const description = document.getElementById('description').value;
-            const comment = document.getElementById('comment').value;
 
             const tbody = document.querySelector('#dataTable tbody');
             const row = document.createElement('tr');
 
             row.innerHTML = `
                 <td>${count}</td>
-                <td><b>${facility}</b></td>
-                <td>${ipAddress}</td>
-                <td>${brand}</td>
-                <td>${model}</td>
-                <td>${type}</td>
-                <td>${matNo}</td>
-                <td>${sn}</td>
-                <td>${description}</td>
-                <td>${qty}</td>
-                <td>${comment}</td>
+                <td><b>${document.getElementById('facility').value}</b></td>
+                <td>${document.getElementById('ipAddress').value}</td>
+                <td>${document.getElementById('brand').value}</td>
+                <td>${document.getElementById('model').value}</td>
+                <td>${document.getElementById('type').value}</td>
+                <td>${document.getElementById('matNo').value}</td>
+                <td>${document.getElementById('sn').value}</td>
+                <td>${document.getElementById('description').value}</td>
+                <td>${document.getElementById('qty').value}</td>
+                <td>${document.getElementById('comment').value}</td>
             `;
 
             tbody.appendChild(row);
 
-            // Resetujemo polja za unos uređaja, ali PAMTIMO Objekat i IP prefiks radi bržeg kucanja
+            // Čišćenje polja
             document.getElementById('model').value = '';
             document.getElementById('type').value = '';
             document.getElementById('matNo').value = '';
@@ -169,21 +248,19 @@
             document.getElementById('qty').value = '1';
         });
 
+        // Export u CSV
         function exportToCSV() {
             let csv = [];
             let rows = document.querySelectorAll("table tr");
-            
             for (let i = 0; i < rows.length; i++) {
                 let row = [], cols = rows[i].querySelectorAll("td, th");
                 for (let j = 0; j < cols.length; j++) {
-                    // Zamena novih redova u tekstu razmakom da ne pokvari CSV format
                     let data = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, " ");
                     row.push('"' + data + '"');
                 }
                 csv.push(row.join(","));        
             }
-
-            let csvFile = new Blob(["\ufeff" + csv.join("\n")], {type: "text/csv;charset=utf-8;"}); // \ufeff dodaje UTF-8 BOM za naša slova u Excelu
+            let csvFile = new Blob(["\ufeff" + csv.join("\n")], {type: "text/csv;charset=utf-8;"});
             let downloadLink = document.createElement("a");
             downloadLink.download = "evidencija_opreme.csv";
             downloadLink.href = window.URL.createObjectURL(csvFile);
