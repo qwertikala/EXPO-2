@@ -3,38 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evidencija Opreme - Bosch OCR + Barkod</title>
+    <title>Evidencija Opreme - OCR + Barkod</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 15px; background-color: #f4f6f9; color: #333; }
-        h2 { color: #1a252f; text-align: center; }
-        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        .form-group { margin-bottom: 10px; }
-        label { display: block; font-weight: bold; margin-bottom: 3px; font-size: 13px; }
-        input, textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        .row { display: flex; gap: 10px; flex-wrap: wrap; }
-        .col { flex: 1; min-width: 140px; }
-        button { border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; width: 100%; margin-bottom: 8px; }
-        .btn-camera { background-color: #e67e22; color: white; }
-        .btn-upload { background-color: #9b59b6; color: white; }
-        .btn-save { background-color: #27ae60; color: white; }
-        .btn-export, .btn-backup { background-color: #2980b9; color: white; }
-        .btn-backup { background-color: #34495e; }
+        :root {
+            --primary: #e67e22;
+            --secondary: #9b59b6;
+            --success: #27ae60;
+            --dark: #2c3e50;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #f0f4f8, #e5ebf3);
+            color: #333;
+            line-height: 1.5;
+        }
+        h1 {
+            text-align: center;
+            color: var(--dark);
+            margin: 15px 0 20px;
+            font-size: 1.65em;
+        }
+        .card {
+            background: white;
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 18px;
+        }
+        button {
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            width: 100%;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .btn-camera { background: var(--primary); color: white; }
+        .btn-upload { background: var(--secondary); color: white; }
+        .btn-backup { background: #34495e; color: white; }
+        .btn-save { background: var(--success); color: white; font-size: 17px; }
 
-        #video { width: 100%; max-width: 500px; border-radius: 8px; }
-        .camera-container { text-align: center; }
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
-        .modal-content { background: white; margin: 5% auto; padding: 20px; width: 90%; max-width: 520px; border-radius: 8px; }
-        .check-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; background: #f8f9fa; padding: 8px; border-radius: 5px; }
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; font-size: 13px; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-        th { background-color: #2c3e50; color: white; }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+        label { font-weight: bold; font-size: 14px; margin-bottom: 4px; display: block; }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .col { flex: 1; min-width: 140px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 13.5px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background: var(--dark); color: white; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75);
+            overflow-y: auto;
+        }
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 22px;
+            width: 92%;
+            max-width: 520px;
+            border-radius: 12px;
+        }
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
-    <h2>📦 Evidencija Opreme (OCR + Barkod)</h2>
+    <h1>📦 Evidencija Opreme (OCR + Barkod)</h1>
 
     <div class="card">
         <button class="btn-camera" onclick="startCamera()">📸 Otvori kameru</button>
@@ -45,11 +117,11 @@
 
     <!-- Kamera -->
     <div id="cameraContainer" class="card" style="display: none;">
-        <div class="camera-container">
-            <video id="video" autoplay playsinline></video>
-            <canvas id="canvas" style="display: none;"></canvas>
-            <button onclick="capturePhoto()" style="background:#27ae60">📷 Slika sada</button>
-            <button onclick="stopCamera()" style="background:#e74c3c">❌ Zatvori kameru</button>
+        <div style="text-align:center">
+            <video id="video" autoplay playsinline style="width:100%; max-width:500px; border-radius:10px;"></video>
+            <canvas id="canvas" style="display:none"></canvas>
+            <button onclick="capturePhoto()" style="background:#27ae60;margin-top:10px">📷 Slika sada</button>
+            <button onclick="stopCamera()" style="background:#e74c3c;margin-top:10px">❌ Zatvori kameru</button>
         </div>
     </div>
 
@@ -57,119 +129,53 @@
     <div class="card">
         <form id="equipmentForm">
             <div class="row">
-                <div class="col form-group"><label>Naziv objekta:</label><input type="text" id="facility" placeholder="npr. Objekt A" required></div>
-                <div class="col form-group"><label>IP Adresa:</label><input type="text" id="ipAddress" placeholder="192.168.1.X"></div>
+                <div class="col"><label>Naziv objekta:</label><input type="text" id="facility" placeholder="npr. Objekt A" required></div>
+                <div class="col"><label>IP Adresa:</label><input type="text" id="ipAddress" placeholder="192.168.1.X"></div>
             </div>
             <div class="row">
-                <div class="col form-group"><label>Proizvo**Naravno!** Evo **kompletnog, samostalnog HTML fajla** sa svim funkcionalnostima koje smo radili:
-
-- Kamera
-- Upload slike
-- OCR (Tesseract)
-- Barkod čitač (jsQR)
-- Poboljšana predobrada slike
-- Review modal
-- Tabela + CSV export
-- Lokalna baza + ZIP backup
-
-```html
-<!DOCTYPE html>
-<html lang="sr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evidencija Opreme - Bosch OCR + Barkod</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 15px; background-color: #f4f6f9; color: #333; }
-        h2 { color: #1a252f; text-align: center; }
-        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        .form-group { margin-bottom: 10px; }
-        label { display: block; font-weight: bold; margin-bottom: 3px; font-size: 13px; }
-        input, textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        .row { display: flex; gap: 10px; flex-wrap: wrap; }
-        .col { flex: 1; min-width: 140px; }
-        button { border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; width: 100%; margin-bottom: 8px; }
-        .btn-camera { background-color: #e67e22; color: white; }
-        .btn-upload { background-color: #9b59b6; color: white; }
-        .btn-save { background-color: #27ae60; color: white; }
-        .btn-export, .btn-backup { background-color: #2980b9; color: white; }
-        .btn-backup { background-color: #34495e; }
-
-        #video { width: 100%; max-width: 500px; border-radius: 8px; }
-        .camera-container { text-align: center; }
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
-        .modal-content { background: white; margin: 5% auto; padding: 20px; width: 90%; max-width: 520px; border-radius: 8px; }
-        .check-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; background: #f8f9fa; padding: 8px; border-radius: 5px; }
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; font-size: 13px; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-        th { background-color: #2c3e50; color: white; }
-    </style>
-
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-</head>
-<body>
-    <h2>📦 Evidencija Opreme (OCR + Barkod)</h2>
-
-    <div class="card">
-        <button class="btn-camera" onclick="startCamera()">📸 Otvori kameru</button>
-        <button class="btn-upload" onclick="document.getElementById('fileInput').click()">📤 Upload slike iz galerije</button>
-        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileUpload(event)">
-        <button class="btn-backup" onclick="exportBackup()">💾 Backup svih slika (ZIP)</button>
-    </div>
-
-    <!-- Kamera -->
-    <div id="cameraContainer" class="card" style="display: none;">
-        <div class="camera-container">
-            <video id="video" autoplay playsinline></video>
-            <canvas id="canvas" style="display: none;"></canvas>
-            <button onclick="capturePhoto()" style="background:#27ae60">📷 Slika sada</button>
-            <button onclick="stopCamera()" style="background:#e74c3c">❌ Zatvori kameru</button>
-        </div>
-    </div>
-
-    <!-- Forma -->
-    <div class="card">
-        <form id="equipmentForm">
-            <div class="row">
-                <div class="col form-group"><label>Naziv objekta:</label><input type="text" id="facility" placeholder="npr. Objekt A" required></div>
-                <div class="col form-group"><label>IP Adresa:</label><input type="text" id="ipAddress" placeholder="192.168.1.X"></div>
+                <div class="col"><label>Proizvođač:</label><input type="text" id="brand" value="BOSCH" required></div>
+                <div class="col"><label>Model:</label><input type="text" id="model"></div>
+                <div class="col"><label>Oznaka / Tip:</label><input type="text" id="type"></div>
             </div>
             <div class="row">
-                <div class="col form-group"><label>Proizvođač:</label><input type="text" id="brand" value="BOSCH" required></div>
-                <div class="col form-group"><label>Model:</label><input type="text" id="model"></div>
-                <div class="col form-group"><label>Oznaka / Tip:</label><input type="text" id="type"></div>
+                <div class="col"><label>Mat/N:</label><input type="text" id="matNo" placeholder="F01U..."></div>
+                <div class="col"><label>S/N ili Barkod:</label><input type="text" id="sn"></div>
+                <div class="col" style="max-width:80px"><label>Količina:</label><input type="number" id="qty" value="1"></div>
             </div>
-            <div class="row">
-                <div class="col form-group"><label>Mat/N:</label><input type="text" id="matNo" placeholder="F01U..."></div>
-                <div class="col form-group"><label>Serijski broj / Barkod:</label><input type="text" id="sn"></div>
-                <div class="col form-group" style="max-width:80px;"><label>Količina:</label><input type="number" id="qty" value="1"></div>
-            </div>
-            <div class="form-group"><label>Opis:</label><input type="text" id="description"></div>
-            <div class="form-group"><label>Komentar:</label><textarea id="comment"></textarea></div>
+            <div><label>Opis:</label><input type="text" id="description"></div>
+            <div><label>Komentar / Napomena:</label><textarea id="comment" rows="2"></textarea></div>
             <button type="submit" class="btn-save">💾 SAČUVAJ U TABELU</button>
         </form>
     </div>
 
-    <!-- Review Modal -->
+    <!-- Modal -->
     <div id="reviewModal" class="modal">
         <div class="modal-content">
             <h3>🔍 Pročitani podaci sa etikete</h3>
             <div id="checkList"></div>
-            <button class="btn-save" onclick="applyCheckedData()">✅ POTVRDI</button>
-            <button style="background:#e74c3c;color:white;margin-top:8px;" onclick="closeModal()">❌ Odustani</button>
+            <button class="btn-save" onclick="applyCheckedData()">✅ POTVRDI I PRENESI</button>
+            <button onclick="closeModal()" style="background:#e74c3c;color:white;margin-top:10px;width:100%">❌ Odustani</button>
         </div>
     </div>
 
     <!-- Tabela -->
     <div class="card">
-        <h3>Lista opreme na objektu</h3>
-        <button class="btn-export" onclick="exportToCSV()">📥 Preuzmi CSV</button>
+        <h3>Lista opreme</h3>
+        <button class="btn-export" onclick="exportToCSV()" style="background:#2980b9">📥 Preuzmi CSV</button>
         <table id="dataTable">
             <thead>
                 <tr>
-                    <th>#</th><th>Objekat</th><th>IP</th><th>Proizvođač</th><th>Model</th>
-                    <th>Tip</th><th>Mat/N</th><th>S/N</th><th>Opis</th><th>Kol.</th><th>Komentar</th>
+                    <th>#</th>
+                    <th>Objekat</th>
+                    <th>IP</th>
+                    <th>Brand</th>
+                    <th>Model</th>
+                    <th>Tip</th>
+                    <th>Mat/N</th>
+                    <th>S/N</th>
+                    <th>Opis</th>
+                    <th>Kol.</th>
+                    <th>Komentar</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -183,9 +189,7 @@
         let count = 0;
 
         async function initWorker() {
-            if (!worker) {
-                worker = await Tesseract.createWorker(['eng', 'deu']);
-            }
+            if (!worker) worker = await Tesseract.createWorker(['eng', 'deu']);
             return worker;
         }
 
@@ -194,8 +198,8 @@
             let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
-                const gray = data[i] * 0.3 + data[i+1] * 0.59 + data[i+2] * 0.11;
-                let val = Math.max(0, Math.min(255, (gray - 70) * 2.1));
+                const gray = data[i]*0.3 + data[i+1]*0.59 + data[i+2]*0.11;
+                let val = Math.max(0, Math.min(255, (gray - 70)*2.1));
                 data[i] = data[i+1] = data[i+2] = val;
             }
             ctx.putImageData(imgData, 0, 0);
@@ -208,12 +212,12 @@
             try {
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
                 return code ? code.data : null;
-            } catch (e) { return null; }
+            } catch(e) { return null; }
         }
 
         async function processImage(canvas) {
             const loading = document.createElement('div');
-            loading.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px 30px;border-radius:10px;box-shadow:0 4px 25px rgba(0,0,0,0.3);z-index:9999;';
+            loading.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:25px;border-radius:12px;box-shadow:0 4px 25px rgba(0,0,0,0.3);z-index:9999;font-size:17px;';
             loading.textContent = '🔄 Čitam tekst i barkod...';
             document.body.appendChild(loading);
 
@@ -227,7 +231,7 @@
                 showReviewModal(text, barcode, canvas.toDataURL('image/png'));
             } catch (err) {
                 loading.remove();
-                alert("Greška pri obradi: " + err.message);
+                alert("Greška: " + err.message);
             }
         }
 
@@ -235,15 +239,12 @@
             const listDiv = document.getElementById('checkList');
             listDiv.innerHTML = `<p><strong>Pročitano:</strong><br><small>${ocrText}</small></p>`;
 
-            if (barcode) {
-                addField(listDiv, 'sn', 'BARKOD / S/N', barcode);
-            }
+            if (barcode) addField(listDiv, 'sn', 'BARKOD / S/N', barcode);
             addField(listDiv, 'brand', 'Proizvođač', 'BOSCH');
             addField(listDiv, 'model', 'Model', '');
             addField(listDiv, 'matNo', 'Mat/N', ocrText.match(/F01U[A-Z0-9-]+/i)?.[0] || '');
             addField(listDiv, 'description', 'Opis', ocrText.split('\n')[0] || '');
 
-            // Sačuvaj u bazu
             imageDB.push({date: new Date().toISOString(), image: imageDataUrl, ocr: ocrText});
             localStorage.setItem('boschEquipmentDB', JSON.stringify(imageDB));
         }
@@ -254,8 +255,8 @@
             item.className = 'check-item';
             item.innerHTML = `
                 <input type="checkbox" id="check_${id}" checked>
-                <label style="width:130px">${label}:</label>
-                <input type="text" id="val_$$   {id}" value="   $${value}">
+                <label style="width:140px">${label}:</label>
+                <input type="text" id="val_${id}" value="${value}">
             `;
             container.appendChild(item);
         }
@@ -269,21 +270,18 @@
             closeModal();
         }
 
-        function closeModal() {
-            document.getElementById('reviewModal').style.display = 'none';
-        }
+        function closeModal() { document.getElementById('reviewModal').style.display = 'none'; }
 
-        // Kamera funkcije
         async function startCamera() {
             try {
-                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }});
+                videoStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}});
                 document.getElementById('video').srcObject = videoStream;
                 document.getElementById('cameraContainer').style.display = 'block';
             } catch (err) { alert("Kamera nije dostupna."); }
         }
 
         function stopCamera() {
-            videoStream?.getTracks().forEach(track => track.stop());
+            videoStream?.getTracks().forEach(t => t.stop());
             document.getElementById('cameraContainer').style.display = 'none';
         }
 
@@ -297,7 +295,6 @@
             processImage(canvas);
         }
 
-        // Upload
         function handleFileUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -316,7 +313,7 @@
             reader.readAsDataURL(file);
         }
 
-        // Tabela i forma
+        // Forma submit
         document.getElementById('equipmentForm').addEventListener('submit', function(e) {
             e.preventDefault();
             count++;
@@ -337,7 +334,7 @@
             `;
             tbody.appendChild(row);
 
-            // Reset polja
+            // Reset
             document.getElementById('model').value = '';
             document.getElementById('type').value = '';
             document.getElementById('matNo').value = '';
@@ -369,12 +366,12 @@
             const zip = new JSZip();
             imageDB.forEach((item, i) => {
                 const base64 = item.image.split(',')[1];
-                zip.file(`etiketa_${i+1}_${item.date.slice(0,19).replace(/:/g,'-')}.png`, base64, {base64: true});
+                zip.file(`etiketa_${i+1}.png`, base64, {base64: true});
             });
             const content = await zip.generateAsync({type: "blob"});
             const link = document.createElement("a");
             link.href = URL.createObjectURL(content);
-            link.download = `bosch_etikete_backup_${new Date().toISOString().slice(0,10)}.zip`;
+            link.download = `bosch_backup_${new Date().toISOString().slice(0,10)}.zip`;
             link.click();
         }
     </script>
