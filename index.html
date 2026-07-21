@@ -1,14 +1,4 @@
-**Problem je jasan!**
 
-Greška se dešava jer **localStorage** (gde čuvamo slike) ima ograničenje od oko 5-10 MB. Kada se nakupi previše slika (base64), prelazi se kvota.
-
----
-
-### Rešenje:
-
-**Zameni ceo kod** sa ovom **ispravljenom verzijom** (dodao sam ograničenje na 15 slika i automatsko brisanje najstarijih):
-
-```html
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -316,8 +306,4 @@ Greška se dešava jer **localStorage** (gde čuvamo slike) ima ograničenje od 
     </script>
 </body>
 </html>
-```
 
-**Glavna promena:** Dodato je `limitDB()` koje čuva samo poslednjih 15 slika.
-
-Zameni kod i probaj ponovo. Ako i dalje bude problem, reci mi.
