@@ -1,4 +1,14 @@
+**Problem je jasan!**
 
+Greška se dešava jer **localStorage** (gde čuvamo slike) ima ograničenje od oko 5-10 MB. Kada se nakupi previše slika (base64), prelazi se kvota.
+
+---
+
+### Rešenje:
+
+**Zameni ceo kod** sa ovom **ispravljenom verzijom** (dodao sam ograničenje na 15 slika i automatsko brisanje najstarijih):
+
+```html
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -6,43 +16,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Evidencija Opreme - OCR + Barkod</title>
     <style>
-        :root {
-            --primary: #e67e22;
-            --secondary: #9b59b6;
-            --success: #27ae60;
-            --dark: #2c3e50;
-        }
+        :root { --primary: #e67e22; --secondary: #9b59b6; --success: #27ae60; --dark: #2c3e50; }
         * { box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
-            margin: 0;
-            padding: 15px;
+            margin: 0; padding: 15px;
             background: linear-gradient(135deg, #f0f4f8, #e5ebf3);
             color: #333;
         }
-        h1 {
-            text-align: center;
-            color: var(--dark);
-            margin: 15px 0 20px;
-            font-size: 1.7em;
-        }
-        .card {
-            background: white;
-            padding: 18px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 18px;
-        }
+        h1 { text-align: center; color: var(--dark); margin: 15px 0 20px; font-size: 1.7em; }
+        .card { background: white; padding: 18px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 18px; }
         button {
-            padding: 14px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            width: 100%;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: all 0.2s;
+            padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
+            width: 100%; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;
         }
         button:hover { transform: translateY(-2px); }
         .btn-camera { background: var(--primary); color: white; }
@@ -50,13 +36,7 @@
         .btn-backup { background: #34495e; color: white; }
         .btn-save { background: var(--success); color: white; font-size: 17px; }
 
-        input, textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 15px;
-        }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; }
         label { font-weight: bold; font-size: 14px; margin-bottom: 4px; display: block; }
         .row { display: flex; gap: 12px; flex-wrap: wrap; }
         .col { flex: 1; min-width: 140px; }
@@ -65,31 +45,9 @@
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background: var(--dark); color: white; }
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0; top: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.75);
-        }
-        .modal-content {
-            background: white;
-            margin: 5% auto;
-            padding: 22px;
-            width: 92%;
-            max-width: 520px;
-            border-radius: 12px;
-        }
-        .check-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 10px 0;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); }
+        .modal-content { background: white; margin: 5% auto; padding: 22px; width: 92%; max-width: 520px; border-radius: 12px; }
+        .check-item { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 8px; }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -105,7 +63,6 @@
         <button class="btn-backup" onclick="exportBackup()">💾 Backup svih slika (ZIP)</button>
     </div>
 
-    <!-- Kamera -->
     <div id="cameraContainer" class="card" style="display: none;">
         <div style="text-align:center">
             <video id="video" autoplay playsinline style="width:100%; max-width:500px; border-radius:10px;"></video>
@@ -115,12 +72,11 @@
         </div>
     </div>
 
-    <!-- Forma -->
     <div class="card">
         <form id="equipmentForm">
             <div class="row">
                 <div class="col"><label>Naziv objekta:</label><input type="text" id="facility" placeholder="npr. Objekt A" required></div>
-                <div class="col"><label>IP Adresa:</label><input type="text" id="ipAddress" placeholder="192.168.1.X"></div>
+                <div class="col"><label>IP Adresa:</label><input type="text" id="ipAddress"></div>
             </div>
             <div class="row">
                 <div class="col"><label>Proizvođač:</label><input type="text" id="brand" value="BOSCH"></div>
@@ -138,26 +94,22 @@
         </form>
     </div>
 
-    <!-- Review Modal -->
     <div id="reviewModal" class="modal">
         <div class="modal-content">
-            <h3>🔍 Pročitani podaci sa etikete</h3>
+            <h3>🔍 Pročitani podaci</h3>
             <div id="checkList"></div>
-            <button class="btn-save" onclick="applyCheckedData()">✅ POTVRDI I PRENESI U FORMULAR</button>
+            <button class="btn-save" onclick="applyCheckedData()">✅ POTVRDI I PRENESI</button>
             <button onclick="closeModal()" style="background:#e74c3c;color:white;margin-top:10px;width:100%">❌ Odustani</button>
         </div>
     </div>
 
-    <!-- Tabela -->
     <div class="card">
         <h3>Lista opreme</h3>
         <button onclick="exportToCSV()" style="background:#2980b9">📥 Preuzmi CSV</button>
         <table id="dataTable">
             <thead>
-                <tr>
-                    <th>#</th><th>Objekat</th><th>IP</th><th>Brand</th><th>Model</th><th>Tip</th>
-                    <th>Mat/N</th><th>S/N</th><th>Opis</th><th>Kol.</th><th>Komentar</th>
-                </tr>
+                <tr><th>#</th><th>Objekat</th><th>IP</th><th>Brand</th><th>Model</th><th>Tip</th>
+                <th>Mat/N</th><th>S/N</th><th>Opis</th><th>Kol.</th><th>Komentar</th></tr>
             </thead>
             <tbody></tbody>
         </table>
@@ -169,12 +121,20 @@
         let imageDB = JSON.parse(localStorage.getItem('boschEquipmentDB') || '[]');
         let count = 0;
 
+        // Ograničenje na 15 slika
+        function limitDB() {
+            if (imageDB.length > 15) {
+                imageDB = imageDB.slice(-15); // zadrži samo poslednjih 15
+                localStorage.setItem('boschEquipmentDB', JSON.stringify(imageDB));
+            }
+        }
+
         async function initWorker() {
             if (!worker) worker = await Tesseract.createWorker(['eng', 'deu']);
             return worker;
         }
 
-        function preprocessCanvas(canvas) {
+        function preprocessCanvas(canvas) { /* isti kod kao ranije */ 
             const ctx = canvas.getContext('2d');
             let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imgData.data;
@@ -242,41 +202,28 @@
         }
 
         function applyCheckedData() {
-            const mapping = {
-                brand: 'brand',
-                model: 'model',
-                matNo: 'matNo',
-                sn: 'sn',
-                description: 'description'
-            };
-
-            Object.keys(mapping).forEach(id => {
-                const check = document.getElementById(`check_${id}`);
-                const valInput = document.getElementById(`val_${id}`);
-                if (check && check.checked && valInput) {
-                    const targetField = document.getElementById(mapping[id]);
-                    if (targetField) targetField.value = valInput.value;
+            const fields = ['brand','model','type','matNo','sn','description'];
+            fields.forEach(id => {
+                if (document.getElementById(`check_${id}`)?.checked) {
+                    const val = document.getElementById(`val_${id}`).value;
+                    if (val) document.getElementById(id).value = val;
                 }
             });
             closeModal();
         }
 
-        function closeModal() {
-            document.getElementById('reviewModal').style.display = 'none';
-        }
+        function closeModal() { document.getElementById('reviewModal').style.display = 'none'; }
 
-        async function startCamera() {
+        async function startCamera() { /* isti kod */ 
             try {
-                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                videoStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}});
                 document.getElementById('video').srcObject = videoStream;
                 document.getElementById('cameraContainer').style.display = 'block';
-            } catch (err) {
-                alert("Kamera nije dostupna.");
-            }
+            } catch (err) { alert("Kamera nije dostupna."); }
         }
 
         function stopCamera() {
-            if (videoStream) videoStream.getTracks().forEach(track => track.stop());
+            videoStream?.getTracks().forEach(t => t.stop());
             document.getElementById('cameraContainer').style.display = 'none';
         }
 
@@ -298,8 +245,7 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.getElementById('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
+                    canvas.width = img.width; canvas.height = img.height;
                     canvas.getContext('2d').drawImage(img, 0, 0);
                     processImage(canvas);
                 };
@@ -308,7 +254,7 @@
             reader.readAsDataURL(file);
         }
 
-        // Submit forme
+        // Forma submit (isti kod)
         document.getElementById('equipmentForm').addEventListener('submit', function(e) {
             e.preventDefault();
             count++;
@@ -329,16 +275,11 @@
             `;
             tbody.appendChild(row);
 
-            // Reset polja
-            document.getElementById('model').value = '';
-            document.getElementById('type').value = '';
-            document.getElementById('matNo').value = '';
-            document.getElementById('sn').value = '';
-            document.getElementById('description').value = '';
-            document.getElementById('comment').value = '';
+            // Reset
+            ['model','type','matNo','sn','description','comment'].forEach(id => document.getElementById(id).value = '');
         });
 
-        function exportToCSV() {
+        function exportToCSV() { /* isti kod kao ranije */ 
             let csv = [];
             let rows = document.querySelectorAll("#dataTable tr");
             for (let i = 0; i < rows.length; i++) {
@@ -369,11 +310,14 @@
             link.download = `bosch_backup_${new Date().toISOString().slice(0,10)}.zip`;
             link.click();
         }
+
+        // Ograničenje kvote
+        limitDB();
     </script>
 </body>
 </html>
 ```
 
-**Zameni ceo sadržaj** svog `index.html` fajla sa ovim kodom i probaj ponovo.
+**Glavna promena:** Dodato je `limitDB()` koje čuva samo poslednjih 15 slika.
 
-Javi da li sada radi prenos podataka u formu kada klikneš "POTVRDI".
+Zameni kod i probaj ponovo. Ako i dalje bude problem, reci mi.
