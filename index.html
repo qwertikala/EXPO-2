@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evidencija Opreme - OCR + Barkod</title>
+    <title>Evidencija Opreme - OCR + Barkod + Tim</title>
     <style>
         :root { --primary: #e67e22; --secondary: #9b59b6; --success: #27ae60; --dark: #2c3e50; --danger: #e74c3c; }
         * { box-sizing: border-box; }
@@ -14,7 +14,8 @@
             background: linear-gradient(135deg, #f0f4f8, #e5ebf3);
             color: #333;
         }
-        h1 { text-align: center; color: var(--dark); margin: 15px 0 20px; font-size: 1.7em; }
+        h1 { text-align: center; color: var(--dark); margin: 15px 0 20px; font-size: 1.6em; }
+        h4 { margin: 14px 0 8px; color: var(--dark); border-bottom: 2px solid #eee; padding-bottom: 4px; }
         .card { background: white; padding: 18px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 18px; }
         button {
             padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
@@ -27,9 +28,9 @@
         .btn-save { background: var(--success); color: white; font-size: 17px; }
         .btn-danger { background: var(--danger); color: white; }
         .btn-neutral { background: #7f8c8d; color: white; }
-        .btn-small { width: auto; padding: 6px 10px; font-size: 12px; margin: 0; }
+        .btn-small { width: auto; padding: 7px 12px; font-size: 12px; margin: 0; }
 
-        input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; }
         label { font-weight: bold; font-size: 14px; margin-bottom: 4px; display: block; }
         .row { display: flex; gap: 12px; flex-wrap: wrap; }
         .col { flex: 1; min-width: 140px; }
@@ -37,6 +38,7 @@
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; display: block; overflow-x: auto; white-space: nowrap; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background: var(--dark); color: white; position: sticky; top: 0; }
+        tr.dup-warn td { background: #fff8e1; }
 
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); overflow-y: auto; }
         .modal-content { background: white; margin: 4% auto; padding: 22px; width: 92%; max-width: 560px; border-radius: 12px; }
@@ -46,25 +48,38 @@
         .badge-ok { background: #d4f5dd; color: #1e7e34; }
         .badge-mid { background: #fff3cd; color: #856404; }
         .badge-warn { background: #fdecea; color: #a94442; }
+        .badge-cloud { background: #d4edff; color: #0b5ed7; }
+        .badge-local { background: #eee; color: #555; }
 
         #cropStage { position: relative; touch-action: none; max-width: 100%; margin: 0 auto; user-select: none; }
         #cropImage { display: block; max-width: 100%; border-radius: 8px; }
         #cropBox { position: absolute; border: 2px solid #27ae60; background: rgba(39,174,96,0.15); touch-action: none; }
         .crop-handle { position: absolute; width: 22px; height: 22px; background: #27ae60; border: 3px solid white; border-radius: 50%; touch-action: none; }
         .crop-hint { font-size: 13px; color: #666; margin-bottom: 10px; }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .warn-box { background: #fdecea; color: #a94442; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
-    <h1>📦 Evidencija Opreme (OCR + Barkod)</h1>
+    <h1>📦 Evidencija Opreme (OCR + Barkod + Tim)</h1>
+
+    <div class="card top-bar">
+        <div id="cloudBadge"></div>
+        <div class="row" style="align-items:center; gap:8px; margin:0;">
+            <span id="installerBadge" style="font-size:13px;color:#666;"></span>
+            <button class="btn-small btn-neutral" onclick="openSettingsModal()" style="width:auto;">⚙️ Podešavanja</button>
+        </div>
+    </div>
 
     <div class="card">
         <button class="btn-camera" onclick="startCamera()">📸 Otvori kameru</button>
         <button class="btn-upload" onclick="document.getElementById('fileInput').click()">📤 Upload slike iz galerije</button>
         <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileUpload(event)">
-        <button class="btn-backup" onclick="exportBackup()">💾 Backup svih slika (ZIP)</button>
+        <button class="btn-backup" onclick="exportBackup()">💾 Backup svih slika (ZIP, lokalno na ovom telefonu)</button>
     </div>
 
     <div id="cameraContainer" class="card" style="display: none;">
@@ -96,13 +111,33 @@
         </div>
     </div>
 
+    <!-- Settings modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <h3>⚙️ Podešavanja</h3>
+
+            <label>Tvoje ime / inicijali (prikazuje se uz unose):</label>
+            <input type="text" id="installerNameInput" placeholder="npr. Marko">
+            <button class="btn-save" onclick="saveInstallerName()">Sačuvaj ime</button>
+
+            <h4>☁️ Deljena lista za tim (Firebase)</h4>
+            <p style="font-size:13px;color:#666">
+                Nalepi ovde Firebase konfiguraciju (JSON) da bi cela ekipa videla istu listu uživo.
+                Uputstvo za pravljenje besplatnog Firebase projekta dobio si u chatu.
+                Svi u timu treba da nalepe ISTU konfiguraciju (isti projekat).
+            </p>
+            <textarea id="firebaseConfigInput" rows="6" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", "storageBucket": "...", "messagingSenderId": "...", "appId": "..."}'></textarea>
+            <button class="btn-save" onclick="saveFirebaseConfig()">💾 Sačuvaj i poveži</button>
+            <button class="btn-neutral" onclick="disconnectCloud()">🔌 Radi samo lokalno (offline)</button>
+            <div class="warn-box">⚠️ Ovo je otvorena (nezaštićena) baza — ne unosi ovde stvarne lozinke uređaja bez dodatne zaštite pristupa.</div>
+
+            <button class="btn-danger" onclick="closeSettingsModal()">Zatvori</button>
+        </div>
+    </div>
+
     <div class="card">
         <form id="equipmentForm">
-            <div class="row">
-                <div class="col"><label>Naziv objekta:</label><input type="text" id="facility" placeholder="npr. Objekt A" required></div>
-                <div class="col"><label>IP Adresa:</label><input type="text" id="ipAddress" placeholder="192.168.x.x"></div>
-                <div class="col"><label>MAC Adresa:</label><input type="text" id="macAddress" placeholder="00:1A:2B:3C:4D:5E"></div>
-            </div>
+            <h4>📋 Fabrički podaci (sa nalepnice)</h4>
             <div class="row">
                 <div class="col"><label>Proizvođač:</label><input type="text" id="brand" value="BOSCH"></div>
                 <div class="col"><label>Model:</label><input type="text" id="model"></div>
@@ -111,9 +146,28 @@
             <div class="row">
                 <div class="col"><label>Mat/N:</label><input type="text" id="matNo"></div>
                 <div class="col"><label>S/N:</label><input type="text" id="sn"></div>
-                <div class="col" style="max-width:80px"><label>Količina:</label><input type="number" id="qty" value="1"></div>
+                <div class="col"><label>Fabrički MAC:</label><input type="text" id="macAddress" placeholder="00:1A:2B:3C:4D:5E"></div>
             </div>
             <div><label>Opis:</label><input type="text" id="description"></div>
+
+            <h4>🔧 Moji podaci za instalaciju</h4>
+            <div class="row">
+                <div class="col"><label>Naziv objekta:</label><input type="text" id="facility" placeholder="npr. Objekt A" required></div>
+                <div class="col"><label>Naziv / lokacija uređaja:</label><input type="text" id="deviceName" placeholder="npr. Kamera ulaz-sever"></div>
+            </div>
+            <div class="row">
+                <div class="col"><label>IP koju upisujem:</label><input type="text" id="ipAddress" placeholder="192.168.x.x"></div>
+                <div class="col"><label>Lozinka koju postavljam:</label><input type="text" id="password" placeholder="⚠️ vidi napomenu u Podešavanjima"></div>
+                <div class="col" style="max-width:100px"><label>Količina:</label><input type="number" id="qty" value="1"></div>
+            </div>
+            <div class="row">
+                <div class="col"><label>Status:</label>
+                    <select id="status">
+                        <option value="Pripremljeno">Pripremljeno (pre montaže)</option>
+                        <option value="Montirano">Montirano i konfigurisano</option>
+                    </select>
+                </div>
+            </div>
             <div><label>Komentar:</label><textarea id="comment" rows="2"></textarea></div>
             <button type="submit" class="btn-save">💾 SAČUVAJ U TABELU</button>
         </form>
@@ -132,28 +186,108 @@
 
     <div class="card">
         <h3>Lista opreme</h3>
+        <input type="text" id="searchBox" placeholder="🔍 Pretraga po IP, MAC, S/N, imenu, objektu..." oninput="renderRows()" style="margin-bottom:10px;">
         <div class="row">
             <button onclick="exportToCSV()" style="background:#2980b9">📥 Preuzmi CSV</button>
-            <button onclick="clearTable()" class="btn-danger">🗑️ Obriši tabelu</button>
+            <button onclick="clearLocalTable()" class="btn-danger">🗑️ Obriši lokalnu listu</button>
         </div>
         <table id="dataTable">
             <thead>
-                <tr><th>#</th><th>Objekat</th><th>IP</th><th>MAC</th><th>Brand</th><th>Model</th><th>Tip</th>
-                <th>Mat/N</th><th>S/N</th><th>Opis</th><th>Kol.</th><th>Komentar</th><th></th></tr>
+                <tr><th>#</th><th>Objekat</th><th>Uređaj</th><th>IP</th><th>MAC</th><th>Brand</th><th>Model</th><th>Tip</th>
+                <th>Mat/N</th><th>S/N</th><th>Status</th><th>Uneo</th><th>Kol.</th><th>Komentar</th><th></th></tr>
             </thead>
             <tbody></tbody>
         </table>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
         let videoStream = null;
         let worker = null;
         let imageDB = JSON.parse(localStorage.getItem('boschEquipmentDB') || '[]');
         let equipmentRows = JSON.parse(localStorage.getItem('boschEquipmentRows') || '[]');
         let lastCapturedImage = null;
-        let lastFullResCanvas = null; // originalna slika (pre sečenja), za "pokušaj ponovo"
+        let lastFullResCanvas = null;
 
-        // ---------- Persistence helpers ----------
+        let db = null;
+        let cloudEnabled = false;
+        let unsubscribeSnapshot = null;
+
+        // ---------- Cloud (Firestore) ----------
+        function updateCloudBadge() {
+            const el = document.getElementById('cloudBadge');
+            el.innerHTML = cloudEnabled
+                ? `<span class="badge badge-cloud">☁️ Povezano sa timom</span>`
+                : `<span class="badge badge-local">📴 Lokalni režim (samo ovaj telefon)</span>`;
+        }
+
+        function tryInitCloud() {
+            const cfgStr = localStorage.getItem('firebaseConfigJson');
+            if (!cfgStr) { cloudEnabled = false; updateCloudBadge(); renderRows(); return; }
+            try {
+                const cfg = JSON.parse(cfgStr);
+                const app = initializeApp(cfg);
+                db = getFirestore(app);
+                if (unsubscribeSnapshot) unsubscribeSnapshot();
+                const q = query(collection(db, 'equipment'), orderBy('createdAt', 'asc'));
+                unsubscribeSnapshot = onSnapshot(q, snapshot => {
+                    equipmentRows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    cloudEnabled = true;
+                    updateCloudBadge();
+                    renderRows();
+                }, err => {
+                    alert('Greška pri povezivanju na cloud: ' + err.message + '\nPrelazim na lokalni režim.');
+                    cloudEnabled = false; updateCloudBadge(); renderRows();
+                });
+            } catch (e) {
+                alert('Neispravna Firebase konfiguracija: ' + e.message);
+                cloudEnabled = false; updateCloudBadge();
+            }
+        }
+
+        window.saveFirebaseConfig = function() {
+            const raw = document.getElementById('firebaseConfigInput').value.trim();
+            if (!raw) return alert('Nalepi konfiguraciju prvo.');
+            try {
+                JSON.parse(raw);
+                localStorage.setItem('firebaseConfigJson', raw);
+                tryInitCloud();
+                alert('Sačuvano. Povezujem se...');
+                closeSettingsModal();
+            } catch (e) {
+                alert('Ovo nije ispravan JSON. Proveri da li si kopirao ceo objekat sa vitičastim zagradama.');
+            }
+        };
+        window.disconnectCloud = function() {
+            localStorage.removeItem('firebaseConfigJson');
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+            cloudEnabled = false; db = null;
+            equipmentRows = JSON.parse(localStorage.getItem('boschEquipmentRows') || '[]');
+            updateCloudBadge(); renderRows(); closeSettingsModal();
+        };
+
+        // ---------- Installer name ----------
+        function updateInstallerBadge() {
+            const name = localStorage.getItem('installerName') || '';
+            document.getElementById('installerBadge').textContent = name ? `👤 ${name}` : '👤 (nepodešeno ime)';
+        }
+        window.saveInstallerName = function() {
+            const val = document.getElementById('installerNameInput').value.trim();
+            if (val) localStorage.setItem('installerName', val);
+            updateInstallerBadge();
+        };
+
+        // ---------- Settings modal ----------
+        window.openSettingsModal = function() {
+            document.getElementById('installerNameInput').value = localStorage.getItem('installerName') || '';
+            document.getElementById('firebaseConfigInput').value = localStorage.getItem('firebaseConfigJson') || '';
+            document.getElementById('settingsModal').style.display = 'block';
+        };
+        window.closeSettingsModal = function() { document.getElementById('settingsModal').style.display = 'none'; };
+
+        // ---------- Local persistence (fallback) ----------
         function saveImageDB() {
             if (imageDB.length > 15) imageDB = imageDB.slice(-15);
             try { localStorage.setItem('boschEquipmentDB', JSON.stringify(imageDB)); }
@@ -162,48 +296,87 @@
                 try { localStorage.setItem('boschEquipmentDB', JSON.stringify(imageDB)); } catch(e2) {}
             }
         }
-        function saveRows() { localStorage.setItem('boschEquipmentRows', JSON.stringify(equipmentRows)); }
-        function renderRows() {
-            const tbody = document.querySelector('#dataTable tbody');
-            tbody.innerHTML = '';
-            equipmentRows.forEach((r, idx) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${idx + 1}</td><td>${escapeHtml(r.facility)}</td><td>${escapeHtml(r.ip)}</td>
-                    <td>${escapeHtml(r.mac)}</td><td>${escapeHtml(r.brand)}</td><td>${escapeHtml(r.model)}</td>
-                    <td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.matNo)}</td><td>${escapeHtml(r.sn)}</td>
-                    <td>${escapeHtml(r.description)}</td><td>${escapeHtml(r.qty)}</td><td>${escapeHtml(r.comment)}</td>
-                    <td><button class="btn-small btn-danger" onclick="deleteRow(${idx})">✕</button></td>
-                `;
-                tbody.appendChild(row);
-            });
+        function saveLocalRows() { localStorage.setItem('boschEquipmentRows', JSON.stringify(equipmentRows)); }
+
+        // ---------- Data store abstraction (cloud or local) ----------
+        async function addRowToStore(entry) {
+            if (cloudEnabled && db) {
+                await addDoc(collection(db, 'equipment'), { ...entry, createdAt: serverTimestamp() });
+            } else {
+                equipmentRows.push({ id: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), ...entry });
+                saveLocalRows();
+                renderRows();
+            }
         }
-        function deleteRow(idx) { equipmentRows.splice(idx, 1); saveRows(); renderRows(); }
-        function clearTable() {
-            if (!confirm('Da li sigurno želiš da obrišeš celu tabelu?')) return;
-            equipmentRows = []; saveRows(); renderRows();
-        }
+        window.deleteRowFromStore = async function(id) {
+            if (!confirm('Obrisati ovaj unos?')) return;
+            if (cloudEnabled && db) {
+                try { await deleteDoc(doc(db, 'equipment', id)); }
+                catch (e) { alert('Greška pri brisanju: ' + e.message); }
+            } else {
+                equipmentRows = equipmentRows.filter(r => r.id !== id);
+                saveLocalRows();
+                renderRows();
+            }
+        };
+        window.clearLocalTable = function() {
+            if (cloudEnabled) return alert('Kad je uključen tim-režim, briši pojedinačne unose (dugme ✕) da ne obrišeš podatke celom timu.');
+            if (!confirm('Da li sigurno želiš da obrišeš celu lokalnu listu?')) return;
+            equipmentRows = []; saveLocalRows(); renderRows();
+        };
+
         function escapeHtml(str) {
             return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         }
 
+        // ---------- Duplicate check ----------
+        function findDuplicates(entry) {
+            const matches = [];
+            equipmentRows.forEach(r => {
+                if (entry.ip && r.ip && r.ip.trim() === entry.ip.trim()) matches.push(`IP ${entry.ip} već postoji (${r.deviceName || r.facility || ''})`);
+                if (entry.mac && r.mac && r.mac.trim().toUpperCase() === entry.mac.trim().toUpperCase()) matches.push(`MAC ${entry.mac} već postoji (${r.deviceName || r.facility || ''})`);
+                if (entry.sn && r.sn && r.sn.trim().toUpperCase() === entry.sn.trim().toUpperCase()) matches.push(`S/N ${entry.sn} već postoji (${r.deviceName || r.facility || ''})`);
+            });
+            return matches;
+        }
+
+        // ---------- Rendering ----------
+        window.renderRows = function() {
+            const searchVal = (document.getElementById('searchBox')?.value || '').toLowerCase();
+            const tbody = document.querySelector('#dataTable tbody');
+            tbody.innerHTML = '';
+            const filtered = equipmentRows.filter(r => {
+                if (!searchVal) return true;
+                return ['facility','ip','mac','sn','deviceName','matNo','model','type'].some(k => (r[k]||'').toString().toLowerCase().includes(searchVal));
+            });
+            filtered.forEach((r, idx) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${idx + 1}</td><td>${escapeHtml(r.facility)}</td><td>${escapeHtml(r.deviceName)}</td>
+                    <td>${escapeHtml(r.ip)}</td><td>${escapeHtml(r.mac)}</td><td>${escapeHtml(r.brand)}</td>
+                    <td>${escapeHtml(r.model)}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.matNo)}</td>
+                    <td>${escapeHtml(r.sn)}</td><td>${escapeHtml(r.status)}</td><td>${escapeHtml(r.addedBy)}</td>
+                    <td>${escapeHtml(r.qty)}</td><td>${escapeHtml(r.comment)}</td>
+                    <td><button class="btn-small btn-danger" onclick="deleteRowFromStore('${r.id}')">✕</button></td>
+                `;
+                tbody.appendChild(row);
+            });
+        };
+
+        // ---------- OCR engine ----------
         async function initWorker() {
             if (!worker) {
                 worker = await Tesseract.createWorker(['eng', 'deu']);
-                // PSM 6 = "pretpostavi jedan jedinstven blok teksta" - bolje za nalepnice nego automatska segmentacija
                 await worker.setParameters({ tessedit_pageseg_mode: '6' });
             }
             return worker;
         }
-
         function cloneCanvas(c) {
             const out = document.createElement('canvas');
             out.width = c.width; out.height = c.height;
             out.getContext('2d').drawImage(c, 0, 0);
             return out;
         }
-
-        // Skalira male slike na veću rezoluciju - presudno za čitanje sitnog teksta na nalepnicama
         function upscaleIfNeeded(sourceCanvas) {
             const minWidth = 1400;
             if (sourceCanvas.width >= minWidth) return sourceCanvas;
@@ -217,10 +390,6 @@
             ctx.drawImage(sourceCanvas, 0, 0, out.width, out.height);
             return out;
         }
-
-        // Otsu binarizacija - automatski nalazi prag i AUTOMATSKI prepoznaje da li je tekst
-        // taman-na-svetlom ili svetao-na-tamnom (čest slučaj kod metalnih nalepnica), i uvek
-        // proizvodi crn tekst na beloj pozadini, što Tesseract najbolje čita.
         function otsuBinarize(canvas) {
             const ctx = canvas.getContext('2d');
             const w = canvas.width, h = canvas.height;
@@ -249,7 +418,7 @@
             }
             let below = 0;
             for (let p = 0; p < n; p++) if (gray[p] < threshold) below++;
-            const minorityIsBelow = below < (n - below); // tekst je obično manjinska klasa piksela
+            const minorityIsBelow = below < (n - below);
             for (let i = 0, p = 0; i < data.length; i += 4, p++) {
                 const isTextPixel = minorityIsBelow ? gray[p] < threshold : gray[p] >= threshold;
                 const val = isTextPixel ? 0 : 255;
@@ -258,8 +427,6 @@
             ctx.putImageData(imgData, 0, 0);
             return canvas;
         }
-
-        // Blaži kontrast bez tvrdog binarizovanja - koristan kad Otsu previše "pojede" sitna slova
         function mildContrast(canvas) {
             const ctx = canvas.getContext('2d');
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -272,7 +439,6 @@
             ctx.putImageData(imgData, 0, 0);
             return canvas;
         }
-
         function detectBarcode(canvas) {
             const ctx = canvas.getContext('2d');
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -282,20 +448,16 @@
             } catch(e) { return null; }
         }
 
-        // ---------- Parsiranje OCR teksta ----------
         function parseOcrText(rawText) {
             const t = rawText.replace(/\r/g, '');
             const result = {};
-
             const macMatch = t.match(/\b([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}\b/);
             if (macMatch) result.mac = macMatch[0].toUpperCase().replace(/-/g, ':');
-
             const ipMatches = t.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g);
             if (ipMatches) {
                 const validIp = ipMatches.find(ip => ip.split('.').every(o => Number(o) <= 255));
                 if (validIp) result.ip = validIp;
             }
-
             let matNoMatch = t.match(/(?:Mat\.?\s?-?\s?Nr\.?|Order\s?No\.?|Best\.?\s?-?\s?Nr\.?)[:\s]*([A-Z0-9\-\.\/]{4,})/i);
             if (matNoMatch) {
                 result.matNo = matNoMatch[1].trim();
@@ -303,26 +465,20 @@
                 const knownPrefix = t.match(/\b(F01U[A-Z0-9]+|NDA-[A-Z0-9\-]+|NBN-[A-Z0-9\-]+|NDP-[A-Z0-9\-]+|NUC-[A-Z0-9\-]+|VG5-[A-Z0-9\-]+)\b/i);
                 if (knownPrefix) result.matNo = knownPrefix[0];
             }
-
             let snMatch = t.match(/(?:S\s?\/?\s?N\.?|Ser\.?\s?No\.?|Serial\s?No\.?|Serial\s?Number)[:\s]*([A-Z0-9\-]{4,})/i);
             if (snMatch) result.sn = snMatch[1].trim();
-
             let typeMatch = t.match(/(?:^|\n)\s*Typ[e]?\.?[:\s]+([A-Z0-9\-\/\. ]{2,40})/i);
             if (typeMatch) result.type = typeMatch[1].trim().split(/\s{2,}/)[0];
-
             let modelMatch = t.match(/(?:^|\n)\s*Model[:\s]+([A-Z0-9\-\/\. ]{2,40})/i);
             if (modelMatch) result.model = modelMatch[1].trim().split(/\s{2,}/)[0];
-
             const brands = ['BOSCH','HIKVISION','DAHUA','AXIS','HANWHA','PANASONIC','SONY','UNIVIEW','VIVOTEK','SAMSUNG'];
             const upperText = t.toUpperCase();
             for (const b of brands) { if (upperText.includes(b)) { result.brand = b; break; } }
-
             return result;
         }
 
         // ---------- Crop UI ----------
         let cropState = { naturalW: 0, naturalH: 0, displayW: 0, displayH: 0, box: {x:0,y:0,w:0,h:0}, dragging: null };
-
         function openCropModal(dataUrl) {
             const img = document.getElementById('cropImage');
             img.onload = () => {
@@ -339,7 +495,6 @@
             img.src = dataUrl;
             document.getElementById('cropModal').style.display = 'block';
         }
-
         function updateCropBoxUI() {
             const box = document.getElementById('cropBox');
             box.style.left = cropState.box.x + 'px';
@@ -347,9 +502,7 @@
             box.style.width = cropState.box.w + 'px';
             box.style.height = cropState.box.h + 'px';
         }
-
         function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
         document.getElementById('cropStage').addEventListener('pointerdown', e => {
             const corner = e.target.dataset ? e.target.dataset.corner : null;
             if (corner) {
@@ -382,7 +535,7 @@
         });
         window.addEventListener('pointerup', () => { cropState.dragging = null; });
 
-        function confirmCrop() {
+        window.confirmCrop = function() {
             const scaleX = cropState.naturalW / cropState.displayW;
             const scaleY = cropState.naturalH / cropState.displayH;
             const sx = cropState.box.x * scaleX, sy = cropState.box.y * scaleY;
@@ -392,42 +545,35 @@
             out.getContext('2d').drawImage(document.getElementById('cropImage'), sx, sy, sw, sh, 0, 0, sw, sh);
             document.getElementById('cropModal').style.display = 'none';
             runOcrPipeline(out);
-        }
-        function skipCrop() {
+        };
+        window.skipCrop = function() {
             const img = document.getElementById('cropImage');
             const out = document.createElement('canvas');
             out.width = cropState.naturalW; out.height = cropState.naturalH;
             out.getContext('2d').drawImage(img, 0, 0);
             document.getElementById('cropModal').style.display = 'none';
             runOcrPipeline(out);
-        }
-        function closeCropModal() { document.getElementById('cropModal').style.display = 'none'; }
-
-        function retryWithoutCrop() {
-            closeModal();
+        };
+        window.closeCropModal = function() { document.getElementById('cropModal').style.display = 'none'; };
+        window.retryWithoutCrop = function() {
+            window.closeModal();
             if (lastFullResCanvas) runOcrPipeline(lastFullResCanvas);
-        }
+        };
 
-        // ---------- OCR pipeline ----------
         async function runOcrPipeline(sourceCanvas) {
             const loading = document.createElement('div');
             loading.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:25px;border-radius:12px;box-shadow:0 4px 25px rgba(0,0,0,0.3);z-index:9999;text-align:center;';
             loading.textContent = '🔄 Čitam tekst i barkod (2 pokušaja)...';
             document.body.appendChild(loading);
-
             try {
                 await initWorker();
                 const barcode = detectBarcode(sourceCanvas);
                 const upscaled = upscaleIfNeeded(sourceCanvas);
-
                 const otsuCanvas = otsuBinarize(cloneCanvas(upscaled));
                 const resultA = await worker.recognize(otsuCanvas.toDataURL('image/png'));
-
                 const mildCanvas = mildContrast(cloneCanvas(upscaled));
                 const resultB = await worker.recognize(mildCanvas.toDataURL('image/png'));
-
                 const best = (resultA.data.confidence >= resultB.data.confidence) ? resultA.data : resultB.data;
-
                 lastCapturedImage = sourceCanvas.toDataURL('image/jpeg', 0.85);
                 loading.remove();
                 showReviewModal(best.text, barcode, best.confidence);
@@ -440,7 +586,6 @@
         function showReviewModal(ocrText, barcode, confidence) {
             const listDiv = document.getElementById('checkList');
             listDiv.innerHTML = '';
-
             const badge = document.getElementById('confidenceBadge');
             if (typeof confidence === 'number') {
                 const cls = confidence >= 70 ? 'badge-ok' : confidence >= 40 ? 'badge-mid' : 'badge-warn';
@@ -448,18 +593,14 @@
                 if (confidence < 40) {
                     listDiv.innerHTML = `<p style="color:#a94442;font-size:13px">⚠️ Niska pouzdanost čitanja — proveri i ručno ispravi polja ispod, ili pokušaj ponovo sa boljim uokvirivanjem/osvetljenjem.</p>`;
                 }
-            } else {
-                badge.innerHTML = '';
-            }
+            } else { badge.innerHTML = ''; }
 
             document.getElementById('rawTextPreview').innerHTML =
                 `<label>Sirovi OCR tekst:</label><div class="raw-text-box">${escapeHtml(ocrText) || '(ništa pročitano)'}</div>`;
 
             const parsed = parseOcrText(ocrText);
-
             if (barcode) addField(listDiv, 'sn', 'BARKOD / S/N', barcode, true);
-            addField(listDiv, 'mac', 'MAC Adresa', parsed.mac || '', false);
-            addField(listDiv, 'ip', 'IP Adresa', parsed.ip || '', false);
+            addField(listDiv, 'mac', 'Fabrički MAC', parsed.mac || '', false);
             addField(listDiv, 'brand', 'Proizvođač', parsed.brand || 'BOSCH', false);
             addField(listDiv, 'model', 'Model', parsed.model || '', false);
             addField(listDiv, 'type', 'Tip', parsed.type || '', false);
@@ -481,8 +622,8 @@
             container.appendChild(item);
         }
 
-        function applyCheckedData() {
-            const fieldToInputId = { brand: 'brand', model: 'model', type: 'type', matNo: 'matNo', sn: 'sn', mac: 'macAddress', ip: 'ipAddress' };
+        window.applyCheckedData = function() {
+            const fieldToInputId = { brand: 'brand', model: 'model', type: 'type', matNo: 'matNo', sn: 'sn', mac: 'macAddress' };
             Object.entries(fieldToInputId).forEach(([id, targetInputId]) => {
                 const checkbox = document.getElementById(`check_${id}`);
                 if (checkbox && checkbox.checked) {
@@ -495,33 +636,32 @@
                 saveImageDB();
                 lastCapturedImage = null;
             }
-            closeModal();
-        }
+            window.closeModal();
+        };
+        window.closeModal = function() { document.getElementById('reviewModal').style.display = 'none'; };
 
-        function closeModal() { document.getElementById('reviewModal').style.display = 'none'; }
-
-        async function startCamera() {
+        window.startCamera = async function() {
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}});
                 document.getElementById('video').srcObject = videoStream;
                 document.getElementById('cameraContainer').style.display = 'block';
             } catch (err) { alert("Kamera nije dostupna."); }
-        }
-        function stopCamera() {
+        };
+        window.stopCamera = function() {
             videoStream?.getTracks().forEach(t => t.stop());
             document.getElementById('cameraContainer').style.display = 'none';
-        }
-        function capturePhoto() {
+        };
+        window.capturePhoto = function() {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
-            stopCamera();
+            window.stopCamera();
             lastFullResCanvas = cloneCanvas(canvas);
             openCropModal(canvas.toDataURL('image/jpeg', 0.92));
-        }
-        function handleFileUpload(e) {
+        };
+        window.handleFileUpload = function(e) {
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -538,14 +678,16 @@
             };
             reader.readAsDataURL(file);
             e.target.value = '';
-        }
+        };
 
-        document.getElementById('equipmentForm').addEventListener('submit', function(e) {
+        document.getElementById('equipmentForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const entry = {
                 facility: document.getElementById('facility').value,
+                deviceName: document.getElementById('deviceName').value,
                 ip: document.getElementById('ipAddress').value,
                 mac: document.getElementById('macAddress').value,
+                password: document.getElementById('password').value,
                 brand: document.getElementById('brand').value,
                 model: document.getElementById('model').value,
                 type: document.getElementById('type').value,
@@ -553,19 +695,27 @@
                 sn: document.getElementById('sn').value,
                 description: document.getElementById('description').value,
                 qty: document.getElementById('qty').value,
-                comment: document.getElementById('comment').value
+                status: document.getElementById('status').value,
+                comment: document.getElementById('comment').value,
+                addedBy: localStorage.getItem('installerName') || ''
             };
-            equipmentRows.push(entry);
-            saveRows();
-            renderRows();
-            ['macAddress','model','type','matNo','sn','description','comment'].forEach(id => document.getElementById(id).value = '');
+
+            const dupes = findDuplicates(entry);
+            if (dupes.length > 0) {
+                const proceed = confirm('⚠️ Moguć duplikat:\n' + dupes.join('\n') + '\n\nSačuvati ipak?');
+                if (!proceed) return;
+            }
+
+            await addRowToStore(entry);
+
+            ['deviceName','macAddress','password','model','type','matNo','sn','description','comment'].forEach(id => document.getElementById(id).value = '');
         });
 
-        function exportToCSV() {
-            const headers = ['#','Objekat','IP','MAC','Brand','Model','Tip','Mat/N','S/N','Opis','Kol.','Komentar'];
+        window.exportToCSV = function() {
+            const headers = ['#','Objekat','Uređaj','IP','MAC','Lozinka','Brand','Model','Tip','Mat/N','S/N','Status','Uneo','Opis','Kol.','Komentar'];
             let csv = [headers.map(h => '"' + h + '"').join(',')];
             equipmentRows.forEach((r, idx) => {
-                const vals = [idx+1, r.facility, r.ip, r.mac, r.brand, r.model, r.type, r.matNo, r.sn, r.description, r.qty, r.comment];
+                const vals = [idx+1, r.facility, r.deviceName, r.ip, r.mac, r.password, r.brand, r.model, r.type, r.matNo, r.sn, r.status, r.addedBy, r.description, r.qty, r.comment];
                 csv.push(vals.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(','));
             });
             const blob = new Blob(["\ufeff" + csv.join("\n")], {type: "text/csv;charset=utf-8;"});
@@ -573,10 +723,10 @@
             link.download = "evidencija_opreme.csv";
             link.href = URL.createObjectURL(blob);
             link.click();
-        }
+        };
 
-        async function exportBackup() {
-            if (imageDB.length === 0) return alert("Nema sačuvanih slika. Slike se čuvaju tek kada potvrdiš podatke sa nalepnice (dugme 'POTVRDI I PRENESI').");
+        window.exportBackup = async function() {
+            if (imageDB.length === 0) return alert("Nema sačuvanih slika. Slike se čuvaju tek kada potvrdiš podatke sa nalepnice (dugme 'POTVRDI I PRENESI'). Slike su uvek samo lokalne na ovom telefonu, ne idu u cloud.");
             const { default: JSZip } = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
             const zip = new JSZip();
             imageDB.forEach((item, i) => {
@@ -588,9 +738,11 @@
             link.href = URL.createObjectURL(content);
             link.download = `bosch_backup_${new Date().toISOString().slice(0,10)}.zip`;
             link.click();
-        }
+        };
 
-        renderRows();
+        // ---------- Init ----------
+        updateInstallerBadge();
+        tryInitCloud();
     </script>
 </body>
 </html>
