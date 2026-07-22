@@ -439,6 +439,103 @@
             ctx.putImageData(imgData, 0, 0);
             return canvas;
         }
+
+        // Adaptivna binarizacija po pločicama - računa prag KONTRASTA lokalno za svaki deo slike,
+        // umesto jednog praga za celu sliku. Ovo je presudno kad je u kadru i pozadina (npr. karton)
+        // i nalepnica, jer globalni prag (Otsu) meša tamnu pozadinu sa tamnim tekstom i uništi čitljivost.
+        function adaptiveBinarize(canvas, tiles) {
+            tiles = tiles || 6;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+            const n = w * h;
+            const gray = new Float32Array(n);
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                gray[p] = data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+            }
+            const tileW = Math.ceil(w / tiles), tileH = Math.ceil(h / tiles);
+            const out = new Uint8ClampedArray(n);
+            for (let ty = 0; ty < tiles; ty++) {
+                for (let tx = 0; tx < tiles; tx++) {
+                    const x0 = tx * tileW, y0 = ty * tileH;
+                    const x1 = Math.min(w, x0 + tileW), y1 = Math.min(h, y0 + tileH);
+                    const hist = new Array(256).fill(0);
+                    let count = 0;
+                    for (let y = y0; y < y1; y++) {
+                        for (let x = x0; x < x1; x++) {
+                            hist[Math.round(gray[y*w+x])]++; count++;
+                        }
+                    }
+                    if (count === 0) continue;
+                    let sum = 0; for (let t=0;t<256;t++) sum += t*hist[t];
+                    let sumB=0, wB=0, maxVar=-1, threshold=127;
+                    for (let t=0;t<256;t++){
+                        wB += hist[t]; if (wB===0) continue;
+                        const wF = count - wB; if (wF===0) break;
+                        sumB += t*hist[t];
+                        const mB = sumB/wB, mF = (sum-sumB)/wF;
+                        const v = wB*wF*(mB-mF)*(mB-mF);
+                        if (v > maxVar) { maxVar = v; threshold = t; }
+                    }
+                    let below = 0;
+                    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (gray[y*w+x] < threshold) below++;
+                    const minorityIsBelow = below < (count - below);
+                    for (let y = y0; y < y1; y++) {
+                        for (let x = x0; x < x1; x++) {
+                            const p = y*w+x;
+                            const isText = minorityIsBelow ? gray[p] < threshold : gray[p] >= threshold;
+                            out[p] = isText ? 0 : 255;
+                        }
+                    }
+                }
+            }
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                data[i] = data[i+1] = data[i+2] = out[p];
+            }
+            ctx.putImageData(imgData, 0, 0);
+            return canvas;
+        }
+
+        // Pronalazi ograničavajući okvir SVETLE nalepnice na tamnijoj pozadini (npr. karton),
+        // radi automatskog predloga za sečenje - korisnik ne mora ništa da vuče prstom.
+        function autoDetectLabelBox(canvas) {
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+            // Downsample radi brzine
+            const step = Math.max(1, Math.round(Math.min(w, h) / 200));
+            let sum = 0, count = 0;
+            const brightness = new Float32Array(w * h);
+            for (let y = 0; y < h; y += step) {
+                for (let x = 0; x < w; x += step) {
+                    const i = (y*w+x)*4;
+                    const g = data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+                    brightness[y*w+x] = g;
+                    sum += g; count++;
+                }
+            }
+            const mean = sum / count;
+            const labelThreshold = mean + 15; // nalepnica je svetlija od proseka slike
+            let minX = w, minY = h, maxX = 0, maxY = 0, found = false;
+            for (let y = 0; y < h; y += step) {
+                for (let x = 0; x < w; x += step) {
+                    if (brightness[y*w+x] > labelThreshold) {
+                        found = true;
+                        if (x < minX) minX = x; if (x > maxX) maxX = x;
+                        if (y < minY) minY = y; if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            if (!found || (maxX - minX) < w * 0.2 || (maxY - minY) < h * 0.15) return null;
+            // mala margina unutra da izbegnemo ivicu nalepnice
+            const marginX = (maxX - minX) * 0.04, marginY = (maxY - minY) * 0.04;
+            return {
+                x: minX + marginX, y: minY + marginY,
+                w: (maxX - minX) - marginX * 2, h: (maxY - minY) - marginY * 2
+            };
+        }
         function detectBarcode(canvas) {
             const ctx = canvas.getContext('2d');
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -471,6 +568,17 @@
             if (typeMatch) result.type = typeMatch[1].trim().split(/\s{2,}/)[0];
             let modelMatch = t.match(/(?:^|\n)\s*Model[:\s]+([A-Z0-9\-\/\. ]{2,40})/i);
             if (modelMatch) result.model = modelMatch[1].trim().split(/\s{2,}/)[0];
+
+            // Mnoge nalepnice (npr. Bosch) imaju šifru tipa kao SAMOSTALNU liniju, bez oznake "Type:"
+            // npr. "API-AMC2-16IOE". Prepoznajemo je po obrascu: veliko slovo/broj, 2+ segmenta odvojena crticom.
+            if (!result.type) {
+                const lines = t.split('\n').map(l => l.trim());
+                const codeLine = lines.find(l =>
+                    /^[A-Z0-9]{2,}(-[A-Z0-9]{1,}){1,5}$/.test(l) &&
+                    !/^(F01U|NDA-|NBN-|NDP-|NUC-|VG5-)/i.test(l)
+                );
+                if (codeLine) result.type = codeLine;
+            }
             const brands = ['BOSCH','HIKVISION','DAHUA','AXIS','HANWHA','PANASONIC','SONY','UNIVIEW','VIVOTEK','SAMSUNG'];
             const upperText = t.toUpperCase();
             for (const b of brands) { if (upperText.includes(b)) { result.brand = b; break; } }
@@ -479,7 +587,7 @@
 
         // ---------- Crop UI ----------
         let cropState = { naturalW: 0, naturalH: 0, displayW: 0, displayH: 0, box: {x:0,y:0,w:0,h:0}, dragging: null };
-        function openCropModal(dataUrl) {
+        function openCropModal(dataUrl, sourceCanvasForDetection) {
             const img = document.getElementById('cropImage');
             img.onload = () => {
                 cropState.naturalW = img.naturalWidth;
@@ -487,8 +595,23 @@
                 requestAnimationFrame(() => {
                     cropState.displayW = img.clientWidth;
                     cropState.displayH = img.clientHeight;
-                    const w = cropState.displayW * 0.85, h = cropState.displayH * 0.5;
-                    cropState.box = { x: (cropState.displayW - w) / 2, y: (cropState.displayH - h) / 2, w, h };
+                    const scaleToDisplay = cropState.displayW / cropState.naturalW;
+
+                    let auto = null;
+                    try {
+                        if (sourceCanvasForDetection) auto = autoDetectLabelBox(sourceCanvasForDetection);
+                    } catch (e) { auto = null; }
+
+                    if (auto) {
+                        cropState.box = {
+                            x: auto.x * scaleToDisplay, y: auto.y * scaleToDisplay,
+                            w: auto.w * scaleToDisplay, h: auto.h * scaleToDisplay
+                        };
+                    } else {
+                        // Fallback: pokrij skoro ceo kadar (bolje da OCR dobije previše nego premalo teksta)
+                        const w = cropState.displayW * 0.94, h = cropState.displayH * 0.88;
+                        cropState.box = { x: (cropState.displayW - w) / 2, y: (cropState.displayH - h) / 2, w, h };
+                    }
                     updateCropBoxUI();
                 });
             };
@@ -510,7 +633,11 @@
             } else if (e.target.id === 'cropBox') {
                 cropState.dragging = { type: 'move', startX: e.clientX, startY: e.clientY, startBox: {...cropState.box} };
             }
-            if (cropState.dragging) e.preventDefault();
+            if (cropState.dragging) {
+                // pointer capture sprečava da se prevlačenje "izgubi" kad prst pređe preko druge ivice na mobilnom
+                try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+                e.preventDefault();
+            }
         });
         window.addEventListener('pointermove', e => {
             if (!cropState.dragging) return;
@@ -569,21 +696,27 @@
                 await initWorker();
                 const barcode = detectBarcode(sourceCanvas);
                 const upscaled = upscaleIfNeeded(sourceCanvas);
-                const otsuCanvas = otsuBinarize(cloneCanvas(upscaled));
-                const resultA = await worker.recognize(otsuCanvas.toDataURL('image/png'));
+
+                const adaptiveCanvas = adaptiveBinarize(cloneCanvas(upscaled), 6);
+                const resultA = await worker.recognize(adaptiveCanvas.toDataURL('image/png'));
+
                 const mildCanvas = mildContrast(cloneCanvas(upscaled));
                 const resultB = await worker.recognize(mildCanvas.toDataURL('image/png'));
-                const best = (resultA.data.confidence >= resultB.data.confidence) ? resultA.data : resultB.data;
+
+                const useA = resultA.data.confidence >= resultB.data.confidence;
+                const best = useA ? resultA.data : resultB.data;
+                const processedPreview = (useA ? adaptiveCanvas : mildCanvas).toDataURL('image/jpeg', 0.85);
+
                 lastCapturedImage = sourceCanvas.toDataURL('image/jpeg', 0.85);
                 loading.remove();
-                showReviewModal(best.text, barcode, best.confidence);
+                showReviewModal(best.text, barcode, best.confidence, processedPreview);
             } catch (err) {
                 loading.remove();
                 alert("Greška: " + err.message);
             }
         }
 
-        function showReviewModal(ocrText, barcode, confidence) {
+        function showReviewModal(ocrText, barcode, confidence, processedPreview) {
             const listDiv = document.getElementById('checkList');
             listDiv.innerHTML = '';
             const badge = document.getElementById('confidenceBadge');
@@ -595,7 +728,13 @@
                 }
             } else { badge.innerHTML = ''; }
 
-            document.getElementById('rawTextPreview').innerHTML =
+            let previewHtml = '';
+            if (processedPreview) {
+                previewHtml = `<label>Slika koju je OCR obrađivao (ako tekst ovde nije čitljiv ni tebi, ni OCR neće moći):</label>
+                <img src="${processedPreview}" style="max-width:100%; border:1px solid #ddd; border-radius:6px; margin-bottom:10px;">`;
+            }
+
+            document.getElementById('rawTextPreview').innerHTML = previewHtml +
                 `<label>Sirovi OCR tekst:</label><div class="raw-text-box">${escapeHtml(ocrText) || '(ništa pročitano)'}</div>`;
 
             const parsed = parseOcrText(ocrText);
@@ -659,7 +798,7 @@
             canvas.getContext('2d').drawImage(video, 0, 0);
             window.stopCamera();
             lastFullResCanvas = cloneCanvas(canvas);
-            openCropModal(canvas.toDataURL('image/jpeg', 0.92));
+            openCropModal(canvas.toDataURL('image/jpeg', 0.92), canvas);
         };
         window.handleFileUpload = function(e) {
             const file = e.target.files[0];
@@ -672,7 +811,7 @@
                     canvas.width = img.width; canvas.height = img.height;
                     canvas.getContext('2d').drawImage(img, 0, 0);
                     lastFullResCanvas = cloneCanvas(canvas);
-                    openCropModal(ev.target.result);
+                    openCropModal(ev.target.result, canvas);
                 };
                 img.src = ev.target.result;
             };
