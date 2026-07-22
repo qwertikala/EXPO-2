@@ -26,6 +26,7 @@
         .btn-backup { background: #34495e; color: white; }
         .btn-save { background: var(--success); color: white; font-size: 17px; }
         .btn-danger { background: var(--danger); color: white; }
+        .btn-neutral { background: #7f8c8d; color: white; }
         .btn-small { width: auto; padding: 6px 10px; font-size: 12px; margin: 0; }
 
         input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; }
@@ -38,12 +39,19 @@
         th { background: var(--dark); color: white; position: sticky; top: 0; }
 
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); overflow-y: auto; }
-        .modal-content { background: white; margin: 5% auto; padding: 22px; width: 92%; max-width: 520px; border-radius: 12px; }
+        .modal-content { background: white; margin: 4% auto; padding: 22px; width: 92%; max-width: 560px; border-radius: 12px; }
         .check-item { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 8px; flex-wrap: wrap; }
         .raw-text-box { max-height: 140px; overflow-y: auto; background: #f4f4f4; padding: 8px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; }
-        .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 2px 6px; font-size: 11px; margin-left: 6px; }
+        .badge { display: inline-block; border-radius: 4px; padding: 3px 8px; font-size: 12px; margin-left: 6px; font-weight: bold; }
         .badge-ok { background: #d4f5dd; color: #1e7e34; }
+        .badge-mid { background: #fff3cd; color: #856404; }
         .badge-warn { background: #fdecea; color: #a94442; }
+
+        #cropStage { position: relative; touch-action: none; max-width: 100%; margin: 0 auto; user-select: none; }
+        #cropImage { display: block; max-width: 100%; border-radius: 8px; }
+        #cropBox { position: absolute; border: 2px solid #27ae60; background: rgba(39,174,96,0.15); touch-action: none; }
+        .crop-handle { position: absolute; width: 22px; height: 22px; background: #27ae60; border: 3px solid white; border-radius: 50%; touch-action: none; }
+        .crop-hint { font-size: 13px; color: #666; margin-bottom: 10px; }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -65,6 +73,26 @@
             <canvas id="canvas" style="display:none"></canvas>
             <button onclick="capturePhoto()" style="background:#27ae60;margin-top:10px">📷 Slika sada</button>
             <button onclick="stopCamera()" style="background:#e74c3c;margin-top:10px">❌ Zatvori kameru</button>
+        </div>
+    </div>
+
+    <!-- Crop modal -->
+    <div id="cropModal" class="modal">
+        <div class="modal-content">
+            <h3>✂️ Uokviri deklaraciju</h3>
+            <p class="crop-hint">Prevuci uglove zelenog okvira tako da unutra ostane SAMO tekst nalepnice (bez pozadine). Ovo znatno poboljšava čitanje.</p>
+            <div id="cropStage">
+                <img id="cropImage" alt="Slika za obradu">
+                <div id="cropBox">
+                    <div class="crop-handle" data-corner="tl" style="top:-11px; left:-11px;"></div>
+                    <div class="crop-handle" data-corner="tr" style="top:-11px; right:-11px;"></div>
+                    <div class="crop-handle" data-corner="bl" style="bottom:-11px; left:-11px;"></div>
+                    <div class="crop-handle" data-corner="br" style="bottom:-11px; right:-11px;"></div>
+                </div>
+            </div>
+            <button class="btn-save" onclick="confirmCrop()">✅ Iseci i pročitaj</button>
+            <button class="btn-neutral" onclick="skipCrop()">➡️ Koristi ceo kadar (bez sečenja)</button>
+            <button class="btn-danger" onclick="closeCropModal()">❌ Odustani</button>
         </div>
     </div>
 
@@ -93,11 +121,12 @@
 
     <div id="reviewModal" class="modal">
         <div class="modal-content">
-            <h3>🔍 Pročitani podaci</h3>
+            <h3>🔍 Pročitani podaci <span id="confidenceBadge"></span></h3>
             <div id="rawTextPreview"></div>
             <div id="checkList"></div>
             <button class="btn-save" onclick="applyCheckedData()">✅ POTVRDI I PRENESI</button>
-            <button onclick="closeModal()" style="background:#e74c3c;color:white;margin-top:10px;width:100%">❌ Odustani</button>
+            <button class="btn-neutral" onclick="retryWithoutCrop()">🔁 Pokušaj ponovo (ceo kadar)</button>
+            <button onclick="closeModal()" style="background:#e74c3c;color:white;width:100%">❌ Odustani</button>
         </div>
     </div>
 
@@ -121,70 +150,62 @@
         let worker = null;
         let imageDB = JSON.parse(localStorage.getItem('boschEquipmentDB') || '[]');
         let equipmentRows = JSON.parse(localStorage.getItem('boschEquipmentRows') || '[]');
-        let lastCapturedImage = null; // dataURL of the image currently being reviewed
-        let count = equipmentRows.length;
+        let lastCapturedImage = null;
+        let lastFullResCanvas = null; // originalna slika (pre sečenja), za "pokušaj ponovo"
 
         // ---------- Persistence helpers ----------
         function saveImageDB() {
-            // Ograničenje na 15 slika da ne pređe localStorage kvotu
             if (imageDB.length > 15) imageDB = imageDB.slice(-15);
-            try {
-                localStorage.setItem('boschEquipmentDB', JSON.stringify(imageDB));
-            } catch (e) {
-                // Ako se localStorage prepuni, obriši najstarije slike i pokušaj ponovo
+            try { localStorage.setItem('boschEquipmentDB', JSON.stringify(imageDB)); }
+            catch (e) {
                 imageDB = imageDB.slice(-5);
                 try { localStorage.setItem('boschEquipmentDB', JSON.stringify(imageDB)); } catch(e2) {}
             }
         }
-        function saveRows() {
-            localStorage.setItem('boschEquipmentRows', JSON.stringify(equipmentRows));
-        }
+        function saveRows() { localStorage.setItem('boschEquipmentRows', JSON.stringify(equipmentRows)); }
         function renderRows() {
             const tbody = document.querySelector('#dataTable tbody');
             tbody.innerHTML = '';
             equipmentRows.forEach((r, idx) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${idx + 1}</td>
-                    <td>${escapeHtml(r.facility)}</td>
-                    <td>${escapeHtml(r.ip)}</td>
-                    <td>${escapeHtml(r.mac)}</td>
-                    <td>${escapeHtml(r.brand)}</td>
-                    <td>${escapeHtml(r.model)}</td>
-                    <td>${escapeHtml(r.type)}</td>
-                    <td>${escapeHtml(r.matNo)}</td>
-                    <td>${escapeHtml(r.sn)}</td>
-                    <td>${escapeHtml(r.description)}</td>
-                    <td>${escapeHtml(r.qty)}</td>
-                    <td>${escapeHtml(r.comment)}</td>
+                    <td>${idx + 1}</td><td>${escapeHtml(r.facility)}</td><td>${escapeHtml(r.ip)}</td>
+                    <td>${escapeHtml(r.mac)}</td><td>${escapeHtml(r.brand)}</td><td>${escapeHtml(r.model)}</td>
+                    <td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.matNo)}</td><td>${escapeHtml(r.sn)}</td>
+                    <td>${escapeHtml(r.description)}</td><td>${escapeHtml(r.qty)}</td><td>${escapeHtml(r.comment)}</td>
                     <td><button class="btn-small btn-danger" onclick="deleteRow(${idx})">✕</button></td>
                 `;
                 tbody.appendChild(row);
             });
         }
-        function deleteRow(idx) {
-            equipmentRows.splice(idx, 1);
-            saveRows();
-            renderRows();
-        }
+        function deleteRow(idx) { equipmentRows.splice(idx, 1); saveRows(); renderRows(); }
         function clearTable() {
             if (!confirm('Da li sigurno želiš da obrišeš celu tabelu?')) return;
-            equipmentRows = [];
-            saveRows();
-            renderRows();
+            equipmentRows = []; saveRows(); renderRows();
         }
         function escapeHtml(str) {
             return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         }
 
         async function initWorker() {
-            if (!worker) worker = await Tesseract.createWorker(['eng', 'deu']);
+            if (!worker) {
+                worker = await Tesseract.createWorker(['eng', 'deu']);
+                // PSM 6 = "pretpostavi jedan jedinstven blok teksta" - bolje za nalepnice nego automatska segmentacija
+                await worker.setParameters({ tessedit_pageseg_mode: '6' });
+            }
             return worker;
         }
 
-        // Skalira male slike na veću rezoluciju - poboljšava OCR na nalepnicama fotografisanim izdaleka
+        function cloneCanvas(c) {
+            const out = document.createElement('canvas');
+            out.width = c.width; out.height = c.height;
+            out.getContext('2d').drawImage(c, 0, 0);
+            return out;
+        }
+
+        // Skalira male slike na veću rezoluciju - presudno za čitanje sitnog teksta na nalepnicama
         function upscaleIfNeeded(sourceCanvas) {
-            const minWidth = 1200;
+            const minWidth = 1400;
             if (sourceCanvas.width >= minWidth) return sourceCanvas;
             const scale = minWidth / sourceCanvas.width;
             const out = document.createElement('canvas');
@@ -197,18 +218,59 @@
             return out;
         }
 
-        function preprocessCanvas(canvas) {
-            const working = upscaleIfNeeded(canvas);
-            const ctx = working.getContext('2d');
-            let imgData = ctx.getImageData(0, 0, working.width, working.height);
+        // Otsu binarizacija - automatski nalazi prag i AUTOMATSKI prepoznaje da li je tekst
+        // taman-na-svetlom ili svetao-na-tamnom (čest slučaj kod metalnih nalepnica), i uvek
+        // proizvodi crn tekst na beloj pozadini, što Tesseract najbolje čita.
+        function otsuBinarize(canvas) {
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
+            const imgData = ctx.getImageData(0, 0, w, h);
             const data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = data[i]*0.3 + data[i+1]*0.59 + data[i+2]*0.11;
-                let val = Math.max(0, Math.min(255, (gray - 70)*2.1));
+            const n = w * h;
+            const gray = new Uint8ClampedArray(n);
+            const hist = new Array(256).fill(0);
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                const g = Math.round(data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114);
+                gray[p] = g; hist[g]++;
+            }
+            let sum = 0;
+            for (let t = 0; t < 256; t++) sum += t * hist[t];
+            let sumB = 0, wB = 0, maxVar = -1, threshold = 127;
+            for (let t = 0; t < 256; t++) {
+                wB += hist[t];
+                if (wB === 0) continue;
+                const wF = n - wB;
+                if (wF === 0) break;
+                sumB += t * hist[t];
+                const mB = sumB / wB;
+                const mF = (sum - sumB) / wF;
+                const varBetween = wB * wF * (mB - mF) * (mB - mF);
+                if (varBetween > maxVar) { maxVar = varBetween; threshold = t; }
+            }
+            let below = 0;
+            for (let p = 0; p < n; p++) if (gray[p] < threshold) below++;
+            const minorityIsBelow = below < (n - below); // tekst je obično manjinska klasa piksela
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                const isTextPixel = minorityIsBelow ? gray[p] < threshold : gray[p] >= threshold;
+                const val = isTextPixel ? 0 : 255;
                 data[i] = data[i+1] = data[i+2] = val;
             }
             ctx.putImageData(imgData, 0, 0);
-            return working.toDataURL('image/png');
+            return canvas;
+        }
+
+        // Blaži kontrast bez tvrdog binarizovanja - koristan kad Otsu previše "pojede" sitna slova
+        function mildContrast(canvas) {
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+                const val = Math.max(0, Math.min(255, (gray - 60) * 1.6));
+                data[i] = data[i+1] = data[i+2] = val;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            return canvas;
         }
 
         function detectBarcode(canvas) {
@@ -220,26 +282,20 @@
             } catch(e) { return null; }
         }
 
-        // ---------- Smart parsing of OCR text ----------
-        // Prepoznaje MAC, IP, S/N, Mat/N, Tip, Model i brend na osnovu tipičnih oznaka
-        // koje se nalaze na nalepnicama opreme (Bosch i slično).
+        // ---------- Parsiranje OCR teksta ----------
         function parseOcrText(rawText) {
             const t = rawText.replace(/\r/g, '');
             const result = {};
 
-            // MAC adresa: 6 parova hex cifara razdvojenih sa : ili -
             const macMatch = t.match(/\b([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}\b/);
             if (macMatch) result.mac = macMatch[0].toUpperCase().replace(/-/g, ':');
 
-            // IP adresa (IPv4)
             const ipMatches = t.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g);
             if (ipMatches) {
-                // izbegni da IP adresa slučajno bude deo MAC-a ili nekog drugog broja
                 const validIp = ipMatches.find(ip => ip.split('.').every(o => Number(o) <= 255));
                 if (validIp) result.ip = validIp;
             }
 
-            // Mat/N (Bosch: "Mat.-Nr.", "Order no.", "Best.-Nr.") ili poznati Bosch prefiksi
             let matNoMatch = t.match(/(?:Mat\.?\s?-?\s?Nr\.?|Order\s?No\.?|Best\.?\s?-?\s?Nr\.?)[:\s]*([A-Z0-9\-\.\/]{4,})/i);
             if (matNoMatch) {
                 result.matNo = matNoMatch[1].trim();
@@ -248,54 +304,154 @@
                 if (knownPrefix) result.matNo = knownPrefix[0];
             }
 
-            // Serijski broj
             let snMatch = t.match(/(?:S\s?\/?\s?N\.?|Ser\.?\s?No\.?|Serial\s?No\.?|Serial\s?Number)[:\s]*([A-Z0-9\-]{4,})/i);
             if (snMatch) result.sn = snMatch[1].trim();
 
-            // Tip / Type
             let typeMatch = t.match(/(?:^|\n)\s*Typ[e]?\.?[:\s]+([A-Z0-9\-\/\. ]{2,40})/i);
             if (typeMatch) result.type = typeMatch[1].trim().split(/\s{2,}/)[0];
 
-            // Model
             let modelMatch = t.match(/(?:^|\n)\s*Model[:\s]+([A-Z0-9\-\/\. ]{2,40})/i);
             if (modelMatch) result.model = modelMatch[1].trim().split(/\s{2,}/)[0];
 
-            // Brend - traži poznata imena proizvođača opreme za video nadzor
             const brands = ['BOSCH','HIKVISION','DAHUA','AXIS','HANWHA','PANASONIC','SONY','UNIVIEW','VIVOTEK','SAMSUNG'];
             const upperText = t.toUpperCase();
-            for (const b of brands) {
-                if (upperText.includes(b)) { result.brand = b; break; }
-            }
+            for (const b of brands) { if (upperText.includes(b)) { result.brand = b; break; } }
 
             return result;
         }
 
-        async function processImage(canvas) {
+        // ---------- Crop UI ----------
+        let cropState = { naturalW: 0, naturalH: 0, displayW: 0, displayH: 0, box: {x:0,y:0,w:0,h:0}, dragging: null };
+
+        function openCropModal(dataUrl) {
+            const img = document.getElementById('cropImage');
+            img.onload = () => {
+                cropState.naturalW = img.naturalWidth;
+                cropState.naturalH = img.naturalHeight;
+                requestAnimationFrame(() => {
+                    cropState.displayW = img.clientWidth;
+                    cropState.displayH = img.clientHeight;
+                    const w = cropState.displayW * 0.85, h = cropState.displayH * 0.5;
+                    cropState.box = { x: (cropState.displayW - w) / 2, y: (cropState.displayH - h) / 2, w, h };
+                    updateCropBoxUI();
+                });
+            };
+            img.src = dataUrl;
+            document.getElementById('cropModal').style.display = 'block';
+        }
+
+        function updateCropBoxUI() {
+            const box = document.getElementById('cropBox');
+            box.style.left = cropState.box.x + 'px';
+            box.style.top = cropState.box.y + 'px';
+            box.style.width = cropState.box.w + 'px';
+            box.style.height = cropState.box.h + 'px';
+        }
+
+        function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+        document.getElementById('cropStage').addEventListener('pointerdown', e => {
+            const corner = e.target.dataset ? e.target.dataset.corner : null;
+            if (corner) {
+                cropState.dragging = { type: 'resize', corner, startX: e.clientX, startY: e.clientY, startBox: {...cropState.box} };
+            } else if (e.target.id === 'cropBox') {
+                cropState.dragging = { type: 'move', startX: e.clientX, startY: e.clientY, startBox: {...cropState.box} };
+            }
+            if (cropState.dragging) e.preventDefault();
+        });
+        window.addEventListener('pointermove', e => {
+            if (!cropState.dragging) return;
+            const dx = e.clientX - cropState.dragging.startX;
+            const dy = e.clientY - cropState.dragging.startY;
+            const sb = cropState.dragging.startBox;
+            if (cropState.dragging.type === 'move') {
+                cropState.box.x = clamp(sb.x + dx, 0, cropState.displayW - sb.w);
+                cropState.box.y = clamp(sb.y + dy, 0, cropState.displayH - sb.h);
+            } else {
+                let { x, y, w, h } = sb;
+                const corner = cropState.dragging.corner;
+                if (corner.includes('l')) { x = sb.x + dx; w = sb.w - dx; }
+                if (corner.includes('r')) { w = sb.w + dx; }
+                if (corner.includes('t')) { y = sb.y + dy; h = sb.h - dy; }
+                if (corner.includes('b')) { h = sb.h + dy; }
+                if (w > 30 && h > 30 && x >= 0 && y >= 0 && x + w <= cropState.displayW && y + h <= cropState.displayH) {
+                    cropState.box = { x, y, w, h };
+                }
+            }
+            updateCropBoxUI();
+        });
+        window.addEventListener('pointerup', () => { cropState.dragging = null; });
+
+        function confirmCrop() {
+            const scaleX = cropState.naturalW / cropState.displayW;
+            const scaleY = cropState.naturalH / cropState.displayH;
+            const sx = cropState.box.x * scaleX, sy = cropState.box.y * scaleY;
+            const sw = cropState.box.w * scaleX, sh = cropState.box.h * scaleY;
+            const out = document.createElement('canvas');
+            out.width = sw; out.height = sh;
+            out.getContext('2d').drawImage(document.getElementById('cropImage'), sx, sy, sw, sh, 0, 0, sw, sh);
+            document.getElementById('cropModal').style.display = 'none';
+            runOcrPipeline(out);
+        }
+        function skipCrop() {
+            const img = document.getElementById('cropImage');
+            const out = document.createElement('canvas');
+            out.width = cropState.naturalW; out.height = cropState.naturalH;
+            out.getContext('2d').drawImage(img, 0, 0);
+            document.getElementById('cropModal').style.display = 'none';
+            runOcrPipeline(out);
+        }
+        function closeCropModal() { document.getElementById('cropModal').style.display = 'none'; }
+
+        function retryWithoutCrop() {
+            closeModal();
+            if (lastFullResCanvas) runOcrPipeline(lastFullResCanvas);
+        }
+
+        // ---------- OCR pipeline ----------
+        async function runOcrPipeline(sourceCanvas) {
             const loading = document.createElement('div');
             loading.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:25px;border-radius:12px;box-shadow:0 4px 25px rgba(0,0,0,0.3);z-index:9999;text-align:center;';
-            loading.textContent = '🔄 Čitam tekst i barkod...';
+            loading.textContent = '🔄 Čitam tekst i barkod (2 pokušaja)...';
             document.body.appendChild(loading);
 
             try {
                 await initWorker();
-                const barcode = detectBarcode(canvas);
-                const processedUrl = preprocessCanvas(canvas);
-                const { data: { text } } = await worker.recognize(processedUrl);
+                const barcode = detectBarcode(sourceCanvas);
+                const upscaled = upscaleIfNeeded(sourceCanvas);
 
-                // sačuvaj original (nepreprocesovan) kao thumbnail za backup
-                lastCapturedImage = canvas.toDataURL('image/jpeg', 0.85);
+                const otsuCanvas = otsuBinarize(cloneCanvas(upscaled));
+                const resultA = await worker.recognize(otsuCanvas.toDataURL('image/png'));
 
+                const mildCanvas = mildContrast(cloneCanvas(upscaled));
+                const resultB = await worker.recognize(mildCanvas.toDataURL('image/png'));
+
+                const best = (resultA.data.confidence >= resultB.data.confidence) ? resultA.data : resultB.data;
+
+                lastCapturedImage = sourceCanvas.toDataURL('image/jpeg', 0.85);
                 loading.remove();
-                showReviewModal(text, barcode);
+                showReviewModal(best.text, barcode, best.confidence);
             } catch (err) {
                 loading.remove();
                 alert("Greška: " + err.message);
             }
         }
 
-        function showReviewModal(ocrText, barcode) {
+        function showReviewModal(ocrText, barcode, confidence) {
             const listDiv = document.getElementById('checkList');
             listDiv.innerHTML = '';
+
+            const badge = document.getElementById('confidenceBadge');
+            if (typeof confidence === 'number') {
+                const cls = confidence >= 70 ? 'badge-ok' : confidence >= 40 ? 'badge-mid' : 'badge-warn';
+                badge.innerHTML = `<span class="badge ${cls}">Pouzdanost: ${Math.round(confidence)}%</span>`;
+                if (confidence < 40) {
+                    listDiv.innerHTML = `<p style="color:#a94442;font-size:13px">⚠️ Niska pouzdanost čitanja — proveri i ručno ispravi polja ispod, ili pokušaj ponovo sa boljim uokvirivanjem/osvetljenjem.</p>`;
+                }
+            } else {
+                badge.innerHTML = '';
+            }
+
             document.getElementById('rawTextPreview').innerHTML =
                 `<label>Sirovi OCR tekst:</label><div class="raw-text-box">${escapeHtml(ocrText) || '(ništa pročitano)'}</div>`;
 
@@ -329,19 +485,16 @@
             const fieldToInputId = { brand: 'brand', model: 'model', type: 'type', matNo: 'matNo', sn: 'sn', mac: 'macAddress', ip: 'ipAddress' };
             Object.entries(fieldToInputId).forEach(([id, targetInputId]) => {
                 const checkbox = document.getElementById(`check_${id}`);
-                if (checkbox?.checked) {
+                if (checkbox && checkbox.checked) {
                     const val = document.getElementById(`val_${id}`).value;
                     if (val) document.getElementById(targetInputId).value = val;
                 }
             });
-
-            // sačuvaj sliku u imageDB za backup
             if (lastCapturedImage) {
                 imageDB.push({ image: lastCapturedImage, timestamp: new Date().toISOString() });
                 saveImageDB();
                 lastCapturedImage = null;
             }
-
             closeModal();
         }
 
@@ -354,12 +507,10 @@
                 document.getElementById('cameraContainer').style.display = 'block';
             } catch (err) { alert("Kamera nije dostupna."); }
         }
-
         function stopCamera() {
             videoStream?.getTracks().forEach(t => t.stop());
             document.getElementById('cameraContainer').style.display = 'none';
         }
-
         function capturePhoto() {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
@@ -367,9 +518,9 @@
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
             stopCamera();
-            processImage(canvas);
+            lastFullResCanvas = cloneCanvas(canvas);
+            openCropModal(canvas.toDataURL('image/jpeg', 0.92));
         }
-
         function handleFileUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -380,12 +531,13 @@
                     const canvas = document.getElementById('canvas');
                     canvas.width = img.width; canvas.height = img.height;
                     canvas.getContext('2d').drawImage(img, 0, 0);
-                    processImage(canvas);
+                    lastFullResCanvas = cloneCanvas(canvas);
+                    openCropModal(ev.target.result);
                 };
                 img.src = ev.target.result;
             };
             reader.readAsDataURL(file);
-            e.target.value = ''; // omogući ponovni upload istog fajla
+            e.target.value = '';
         }
 
         document.getElementById('equipmentForm').addEventListener('submit', function(e) {
@@ -406,8 +558,6 @@
             equipmentRows.push(entry);
             saveRows();
             renderRows();
-
-            // Reset - zadrži objekat/IP jer se obično ne menjaju u nizu unosa za isti sistem
             ['macAddress','model','type','matNo','sn','description','comment'].forEach(id => document.getElementById(id).value = '');
         });
 
@@ -440,7 +590,6 @@
             link.click();
         }
 
-        // ---------- Inicijalizacija pri učitavanju ----------
         renderRows();
     </script>
 </body>
