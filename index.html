@@ -800,22 +800,37 @@
             lastFullResCanvas = cloneCanvas(canvas);
             openCropModal(canvas.toDataURL('image/jpeg', 0.92), canvas);
         };
-        window.handleFileUpload = function(e) {
+        window.handleFileUpload = async function(e) {
             const file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = ev => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.getElementById('canvas');
-                    canvas.width = img.width; canvas.height = img.height;
-                    canvas.getContext('2d').drawImage(img, 0, 0);
-                    lastFullResCanvas = cloneCanvas(canvas);
-                    openCropModal(ev.target.result, canvas);
+
+            // createImageBitmap sa imageOrientation:'from-image' ispravno rotira sliku prema
+            // EXIF podacima telefona PRE crtanja na canvas. Bez ovoga, slike snimljene u
+            // portret modu (uobičajeno kod WhatsApp/galerije) završe "na boku" u obradi,
+            // pa OCR ne može ništa da pročita iako slika izgleda normalno na ekranu.
+            try {
+                const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+                const canvas = document.getElementById('canvas');
+                canvas.width = bitmap.width; canvas.height = bitmap.height;
+                canvas.getContext('2d').drawImage(bitmap, 0, 0);
+                lastFullResCanvas = cloneCanvas(canvas);
+                openCropModal(canvas.toDataURL('image/jpeg', 0.92), canvas);
+            } catch (err) {
+                // Fallback za starije browsere bez podrške za imageOrientation opciju
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.getElementById('canvas');
+                        canvas.width = img.width; canvas.height = img.height;
+                        canvas.getContext('2d').drawImage(img, 0, 0);
+                        lastFullResCanvas = cloneCanvas(canvas);
+                        openCropModal(ev.target.result, canvas);
+                    };
+                    img.src = ev.target.result;
                 };
-                img.src = ev.target.result;
-            };
-            reader.readAsDataURL(file);
+                reader.readAsDataURL(file);
+            }
             e.target.value = '';
         };
 
